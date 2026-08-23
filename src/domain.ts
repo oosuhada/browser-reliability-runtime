@@ -32,7 +32,8 @@ export type FailureType =
   | "HIDDEN_ELEMENT"
   | "STALE_STATE"
   | "CONFIRMATION_REQUIRED"
-  | "ICON_ONLY_TARGET";
+  | "ICON_ONLY_TARGET"
+  | "UNKNOWN_STATE";
 
 export type RecoveryAction =
   | "NONE"
