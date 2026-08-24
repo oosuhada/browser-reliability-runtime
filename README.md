@@ -2,6 +2,8 @@
 
 WorkflowLens is a **multimodal workflow reliability layer** for browser automation. It is not a general-purpose browser agent. The system assumes an existing Playwright/RPA workflow and focuses on one question:
 
+Live synthetic demo: **https://workflowlens.oosu.dev**
+
 > When the workflow fails, can we understand why it failed, choose a policy-safe recovery, execute it, and verify that the workflow returned to a valid state?
 
 The repository is fully synthetic and reproducible. It does not contain production browser sessions, private company screenshots, credentials, or proprietary workflow data.
