@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { WorkflowTrace } from "../browser/types.js";
+import { getPolicy } from "../domain.js";
 
 interface DatasetSample {
   sample_id: string;
@@ -16,6 +17,7 @@ interface DatasetSample {
   accessibility_tree: string;
   action_history: unknown[];
   customer_policy_enabled: boolean;
+  customer_policy: unknown;
   failure: unknown;
   diagnosis: unknown;
   recovery_ranking: unknown[];
@@ -54,6 +56,7 @@ async function main(): Promise<void> {
         accessibility_tree: step.observation.accessibility,
         action_history: step.actionHistory,
         customer_policy_enabled: trace.modalities.policy,
+        customer_policy: trace.modalities.policy ? getPolicy(trace.customer) : null,
         failure: step.groundTruth,
         diagnosis: step.diagnosis,
         recovery_ranking: step.rankedRecoveries,

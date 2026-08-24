@@ -193,6 +193,7 @@ app.get("/", (req: Request, res: Response) => {
       <div class="actions">
         <button class="btn" onclick="launch('refund_order')">Run refund workflow</button>
         <button class="btn secondary" onclick="launch('lookup_shipment')">Run shipment workflow</button>
+        <a class="btn secondary" href="/viewer">Open trace viewer</a>
       </div>
     </section>
     <section class="card"><h2>Product boundary</h2><p>This application is intentionally synthetic. WorkflowLens sits above deterministic browser automation and focuses on failure detection, diagnosis, policy-aware recovery, verification, and explainability.</p></section>

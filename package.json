@@ -13,6 +13,8 @@
     "run:workflow": "tsx src/browser/runner.ts",
     "benchmark": "tsx src/evaluation/benchmark.ts",
     "dataset:export": "tsx src/dataset/export.ts",
+    "dataset:grounding": "tsx src/dataset/grounding.ts",
+    "evaluate:grounding": "tsx src/evaluation/grounding.ts",
     "benchmark:runtime": "tsx src/evaluation/runtime.ts"
   },
   "dependencies": {
