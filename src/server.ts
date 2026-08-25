@@ -123,13 +123,13 @@ function shell(title: string, state: WorkflowState, req: Request, body: string, 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${esc(title)} · WorkflowLens Synthetic Commerce</title>
+    <title>${esc(title)} · Browser Reliability Runtime</title>
     ${styles()}
   </head>
   <body data-workflow-state="${state}">
     <main class="shell">
       <header class="topbar">
-        <div><div class="brand">WorkflowLens Synthetic Commerce</div><small>Controlled browser reliability testbed</small></div>
+        <div><div class="brand">Browser Reliability Runtime</div><small>Controlled synthetic commerce reliability testbed</small></div>
         <div class="pill">Synthetic tenant</div>
       </header>
       ${applied && debug ? `<div class="mut-banner" data-testid="mutation-banner"><strong>Debug mutation:</strong> ${esc(mutation.label)} — ${esc(mutation.description)}</div>` : ""}
@@ -150,7 +150,7 @@ function overlay(id: string, heading: string, text: string, actionLabel = "Close
 }
 
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ ok: true, service: "workflowlens-synthetic-commerce" });
+  res.json({ ok: true, service: "browser-reliability-runtime" });
 });
 
 app.post("/api/demo/run", async (req: Request, res: Response) => {
@@ -293,7 +293,7 @@ app.get("/", (req: Request, res: Response) => {
       </div>
       <div id="run-status" class="notice" style="display:none;margin-top:16px"></div>
     </section>
-    <section class="card"><h2>Product boundary</h2><p>This application is intentionally synthetic. WorkflowLens sits above deterministic browser automation and focuses on failure detection, diagnosis, policy-aware recovery, verification, and explainability.</p></section>
+    <section class="card"><h2>Product boundary</h2><p>This application is intentionally synthetic. Browser Reliability Runtime sits above deterministic browser automation and focuses on failure detection, diagnosis, policy-aware recovery, verification, and explainability.</p></section>
     <script>
       function launch(workflow) {
         const customer = document.getElementById('customer').value;
@@ -449,7 +449,7 @@ app.get("/orders/:orderId/refund", (req: Request, res: Response) => {
       <p><a href="/orders/${order.id}${suffix}">← Order</a></p>
       <h1>Refund ${order.id}</h1>
       <p>Refund amount: <strong>$${order.total.toFixed(2)}</strong></p>
-      <p>Business policy is intentionally not rendered on this screen. WorkflowLens receives it as external domain context.</p>
+      <p>Business policy is intentionally not rendered on this screen. Browser Reliability Runtime receives it as external domain context.</p>
       ${permissionDenied ? `<div class="notice" data-testid="permission_banner" data-blocker-id="permission_banner">Permission denied: your role cannot execute refunds.</div>` : ""}
       ${stale ? `<div class="notice" data-testid="stale_state_banner" data-blocker-id="stale_state_banner">Order data changed after page load. Refresh before proceeding.</div>` : ""}
       <div><label for="reason">Refund reason</label><textarea id="reason" rows="3">${applied && mutation.id === "validation_error" ? "" : "Customer requested return"}</textarea><div id="validation" class="notice" style="display:none"></div></div>
@@ -544,6 +544,6 @@ app.get("/maintenance", (req: Request, res: Response) => {
 });
 
 app.listen(port, () => {
-  console.log(`WorkflowLens synthetic commerce listening on http://127.0.0.1:${port}`);
+  console.log(`Browser Reliability Runtime synthetic commerce listening on http://127.0.0.1:${port}`);
 });
 

@@ -26,7 +26,7 @@ def build_prompt(sample: dict[str, Any]) -> str:
     history = sample.get("action_history")
     return "\n\n".join(
         [
-            "You are WorkflowLens, a browser workflow reliability layer.",
+            "You are Browser Reliability Runtime, a browser workflow reliability layer.",
             "Diagnose the automation failure and choose a safe recovery. Do not plan a general browser task.",
             f"FAILURE TAXONOMY\n{FAILURE_TAXONOMY}",
             f"RECOVERY ACTIONS\n{RECOVERY_ACTIONS}",

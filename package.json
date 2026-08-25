@@ -1,9 +1,9 @@
 {
-  "name": "workflowlens",
+  "name": "browser-reliability-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Multimodal workflow reliability layer for browser automation failure diagnosis and recovery.",
+  "description": "Multimodal browser reliability runtime for failure diagnosis, policy-aware recovery, verification, and explainability.",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",

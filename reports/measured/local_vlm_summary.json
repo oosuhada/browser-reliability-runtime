@@ -1,0 +1,29 @@
+{
+  "project": "browser-reliability-runtime",
+  "experiment": "local_text_vs_vlm_heldout",
+  "eval_samples": 9,
+  "held_out_failures": [
+    "AUTH_EXPIRED",
+    "NAVIGATION_ERROR",
+    "RESPONSIVE_LAYOUT_CHANGE"
+  ],
+  "text_model": {
+    "model": "qwen_qwen3-coder-next",
+    "modalities": "structured-text",
+    "failure_accuracy": 0.6666666666666666,
+    "failure_macro_f1": 0.5,
+    "recovery_top1": 0.3333333333333333,
+    "recovery_top3": 0.6666666666666666,
+    "average_latency_ms": 31259
+  },
+  "vision_model": {
+    "model": "google/gemma-4-26b-a4b",
+    "runtime_identifier": "workflowlens-gemma4-vlm",
+    "modalities": "vision+structured",
+    "failure_accuracy": 1.0,
+    "failure_macro_f1": 1.0,
+    "recovery_top1": 0.6666666666666666,
+    "recovery_top3": 1.0,
+    "average_latency_ms": 34209
+  }
+}
