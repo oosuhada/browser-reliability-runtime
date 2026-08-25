@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.oosu.workflowlens</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/opt/node@22/bin/node</string>
+    <string>/Users/gabrieljang/Services/workflowlens/dist/server.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/gabrieljang/Services/workflowlens</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <key>PORT</key>
+    <string>4317</string>
+    <key>DEMO_BROWSER_RUNS_ENABLED</key>
+    <string>true</string>
+    <key>WORKFLOWLENS_BASE_URL</key>
+    <string>http://127.0.0.1:4317</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/gabrieljang/Library/Logs/workflowlens.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/gabrieljang/Library/Logs/workflowlens.err.log</string>
+</dict>
+</plist>

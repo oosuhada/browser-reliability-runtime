@@ -110,6 +110,8 @@ DEMO_BROWSER_RUNS_ENABLED=true npm start
 
 The public demo only accepts the repository's fixed synthetic workflows, customers, mutations, and local order. It does not accept arbitrary URLs or browser instructions, allows only one active run at a time, and applies a small in-memory run limit.
 
+The Mac mini deployment uses the versioned launchd template at `deploy/dev.oosu.workflowlens.plist`. The public service enables the same allowlisted synthetic runner and points browser execution back to the local `4317` service only.
+
 In another shell:
 
 ```bash
