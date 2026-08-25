@@ -1,11 +1,11 @@
 import express from "express";
 import type { Request, Response } from "express";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   ORDERS,
   getOrder,
   getPolicy,
-  requiresHumanApproval,
-  type CustomerPolicy,
   type WorkflowState
 } from "./domain.js";
 import { MUTATIONS, getMutation, mutationApplies, type MutationDefinition } from "./mutations.js";
@@ -15,6 +15,7 @@ const port = Number(process.env.PORT ?? 4317);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use("/artifacts", express.static(path.resolve("artifacts")));
 
 function esc(value: unknown): string {
   return String(value)
@@ -105,7 +106,7 @@ function shell(title: string, state: WorkflowState, req: Request, body: string, 
     <main class="shell">
       <header class="topbar">
         <div><div class="brand">WorkflowLens Synthetic Commerce</div><small>Controlled browser reliability testbed</small></div>
-        <div class="pill">${esc(policy.name)}</div>
+        <div class="pill">Synthetic tenant: ${esc(policy.id)}</div>
       </header>
       ${applied ? `<div class="mut-banner" data-testid="mutation-banner"><strong>Injected mutation:</strong> ${esc(mutation.label)} — ${esc(mutation.description)}</div>` : ""}
       ${body}
@@ -126,6 +127,55 @@ function overlay(id: string, heading: string, text: string, actionLabel = "Close
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "workflowlens-synthetic-commerce" });
+});
+
+app.get("/viewer", async (req: Request, res: Response) => {
+  const root = path.resolve("artifacts", "traces");
+  const entries = await readdir(root, { withFileTypes: true });
+  const traces: Array<{ runId: string; workflow: string; mutation: string; success: boolean; durationMs: number; customer: string }> = [];
+  for (const entry of entries.filter((value) => value.isDirectory()).slice(-50).reverse()) {
+    try {
+      const trace = JSON.parse(await readFile(path.join(root, entry.name, "trace.json"), "utf8")) as { runId: string; workflow: string; mutation: string; success: boolean; durationMs: number; customer: string };
+      traces.push(trace);
+    } catch {
+      // Ignore partially written or unrelated directories.
+    }
+  }
+  const rows = traces.map((trace) => `<tr><td><a href="/viewer/${encodeURIComponent(trace.runId)}">${esc(trace.runId)}</a></td><td>${esc(trace.workflow)}</td><td>${esc(trace.mutation)}</td><td>${esc(trace.customer)}</td><td>${trace.success ? "SUCCESS" : "FAILED"}</td><td>${trace.durationMs} ms</td></tr>`).join("");
+  res.send(shell("Trace viewer", "UNKNOWN", req, `<section class="card"><h1>Workflow Trace Viewer</h1><p>Each run explains the action, evidence, diagnosis, ranked recovery, policy decision, and verification result.</p><div style="overflow:auto"><table><thead><tr><th>Run</th><th>Workflow</th><th>Mutation</th><th>Customer</th><th>Result</th><th>Latency</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No traces yet. Run the Playwright runner first.</td></tr>`}</tbody></table></div></section>`));
+});
+
+app.get("/viewer/:runId", async (req: Request, res: Response) => {
+  const runId = routeParam(req.params.runId);
+  if (!/^[a-zA-Z0-9_-]+$/.test(runId)) return res.status(400).send("Invalid run id");
+  try {
+    const trace = JSON.parse(await readFile(path.resolve("artifacts", "traces", runId, "trace.json"), "utf8")) as {
+      goal: string;
+      workflow: string;
+      mutation: string;
+      customer: string;
+      success: boolean;
+      safeEscalation: boolean;
+      durationMs: number;
+      vlmCalls: number;
+      steps: Array<{
+        index: number;
+        phase: string;
+        screenshot: string;
+        observation: { workflowState: string; url: string; targetBBox: unknown; blockerBBox: unknown };
+        action: { name: string; success: boolean; error: string | null } | null;
+        diagnosis: { failureType: string; confidence: number; reason: string; evidence: string[] } | null;
+        rankedRecoveries: Array<{ action: string; score: number }>;
+        policyDecision: { decision: string; reason: string } | null;
+        executedRecovery: string | null;
+        recoverySucceeded: boolean | null;
+      }>;
+    };
+    const timeline = trace.steps.map((step) => `<section class="card"><div class="topbar"><div><strong>#${step.index} · ${esc(step.phase)}</strong><div>${esc(step.observation.workflowState)}</div></div><span class="pill">${esc(step.observation.url)}</span></div><div class="grid"><div><img src="/artifacts/traces/${encodeURIComponent(runId)}/${encodeURIComponent(step.screenshot)}" alt="Trace screenshot ${step.index}" style="width:100%;border:1px solid #e2e7f0;border-radius:12px" /></div><div>${step.action ? `<h3>Action</h3><p>${esc(step.action.name)} · ${step.action.success ? "success" : "failed"}</p>${step.action.error ? `<pre style="white-space:pre-wrap">${esc(step.action.error)}</pre>` : ""}` : ""}${step.diagnosis ? `<h3>Diagnosis</h3><p><strong>${esc(step.diagnosis.failureType)}</strong> · ${(step.diagnosis.confidence * 100).toFixed(0)}%</p><p>${esc(step.diagnosis.reason)}</p><ul>${step.diagnosis.evidence.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}${step.rankedRecoveries.length ? `<h3>Recovery ranking</h3><ol>${step.rankedRecoveries.map((item) => `<li>${esc(item.action)} · ${item.score.toFixed(2)}</li>`).join("")}</ol>` : ""}${step.policyDecision ? `<h3>Policy</h3><p>${esc(step.policyDecision.decision)} — ${esc(step.policyDecision.reason)}</p>` : ""}${step.executedRecovery ? `<h3>Executed</h3><p>${esc(step.executedRecovery)} · ${step.recoverySucceeded ? "success" : "failed"}</p>` : ""}</div></div></section>`).join("");
+    return res.send(shell(`Trace ${runId}`, "UNKNOWN", req, `<section class="card"><p><a href="/viewer">← All traces</a></p><h1>${esc(trace.goal)}</h1><div class="grid"><div><strong>Workflow</strong><p>${esc(trace.workflow)}</p></div><div><strong>Mutation</strong><p>${esc(trace.mutation)}</p></div><div><strong>Customer</strong><p>${esc(trace.customer)}</p></div><div><strong>Outcome</strong><p>${trace.success ? "SUCCESS" : "FAILED"}${trace.safeEscalation ? " · SAFE ESCALATION" : ""}</p></div><div><strong>Latency</strong><p>${trace.durationMs} ms</p></div><div><strong>Vision calls</strong><p>${trace.vlmCalls}</p></div></div></section>${timeline}`));
+  } catch {
+    return res.status(404).send("Trace not found");
+  }
 });
 
 app.get("/", (req: Request, res: Response) => {
@@ -250,18 +300,15 @@ app.get("/orders/:orderId/shipment", (req: Request, res: Response) => {
 
 app.get("/orders/:orderId/refund", (req: Request, res: Response) => {
   const order = getOrder(routeParam(req.params.orderId));
-  const policy = getPolicy(typeof req.query.customer === "string" ? req.query.customer : undefined);
   const suffix = querySuffix(req);
   const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
   const applied = mutationApplies(mutation, "REFUND");
   const disabled = applied && mutation.id === "disabled_action";
   const permissionDenied = applied && mutation.id === "permission_denied";
   const stale = applied && mutation.id === "stale_state";
-  const needsApproval = requiresHumanApproval(policy, order.total);
-  const executeLabel = needsApproval ? "Request human approval" : "Execute refund";
-  const actionUrl = needsApproval ? `/orders/${order.id}/approval${suffix}` : `/orders/${order.id}/complete${suffix}`;
+  const actionUrl = `/orders/${order.id}/complete${suffix}`;
   const validationScript = applied && mutation.id === "validation_error"
-    ? `if (!document.getElementById('reason').value.trim()) { document.getElementById('validation').textContent = 'Refund reason is required.'; return; }`
+    ? `if (!document.getElementById('reason').value.trim()) { document.getElementById('validation').textContent = 'Refund reason is required.'; document.getElementById('validation').style.display = 'block'; return; }`
     : "";
   const clickScript = applied && mutation.id === "confirmation_required"
     ? `document.getElementById('confirmation-modal').style.display = 'grid';`
@@ -274,11 +321,11 @@ app.get("/orders/:orderId/refund", (req: Request, res: Response) => {
       <p><a href="/orders/${order.id}${suffix}">← Order</a></p>
       <h1>Refund ${order.id}</h1>
       <p>Refund amount: <strong>$${order.total.toFixed(2)}</strong></p>
-      <p>Policy decision: <strong>${needsApproval ? "HUMAN APPROVAL REQUIRED" : "AUTO EXECUTION ALLOWED"}</strong></p>
+      <p>Business policy is intentionally not rendered on this screen. WorkflowLens receives it as external domain context.</p>
       ${permissionDenied ? `<div class="notice" data-testid="permission_banner" data-blocker-id="permission_banner">Permission denied: your role cannot execute refunds.</div>` : ""}
       ${stale ? `<div class="notice" data-testid="stale_state_banner" data-blocker-id="stale_state_banner">Order data changed after page load. Refresh before proceeding.</div>` : ""}
       <div><label for="reason">Refund reason</label><textarea id="reason" rows="3">${applied && mutation.id === "validation_error" ? "" : "Customer requested return"}</textarea><div id="validation" class="notice" style="display:none"></div></div>
-      <div class="actions"><button class="btn danger" data-target-id="execute_refund_button" ${disabled || permissionDenied || stale ? "disabled" : ""} onclick="handleRefund()">${executeLabel}</button></div>
+      <div class="actions"><button class="btn danger" data-target-id="execute_refund_button" ${disabled || permissionDenied || stale ? "disabled" : ""} onclick="handleRefund()">Execute refund</button></div>
     </section>
     <div id="confirmation-modal" class="overlay" data-testid="confirmation_modal" data-blocker-id="confirmation_modal" style="display:none"><section class="modal"><h2>Confirm refund</h2><p>Confirm the final refund action for ${order.id}.</p><button class="btn danger" data-recovery-action="CONFIRM" onclick="window.location.href='${actionUrl}'">Confirm</button></section></div>
     ${authOverlay}
