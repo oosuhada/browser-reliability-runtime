@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "run:workflow": "tsx src/browser/runner.ts",
     "benchmark": "tsx src/evaluation/benchmark.ts",
+    "dataset:generate": "tsx src/dataset/generate.ts",
     "dataset:export": "tsx src/dataset/export.ts",
     "dataset:grounding": "tsx src/dataset/grounding.ts",
     "evaluate:grounding": "tsx src/evaluation/grounding.ts",

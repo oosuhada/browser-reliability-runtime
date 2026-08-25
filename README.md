@@ -160,11 +160,26 @@ A failure trace includes:
 
 ### Failure diagnosis / recovery dataset
 
-Run workflows first, then export failure steps:
+Generate a balanced synthetic trace batch across all 16 failure classes and multiple orders, then export failure steps:
 
 ```bash
+npm run dataset:generate
 npm run dataset:export
 ```
+
+The generator currently produces 43 controlled workflow runs: three order variants for failures that occur before the refund policy gate, and two low-value order variants for failures that occur on the refund execution screen. This keeps the failure mutation reachable while adding amount/order variation without manual labels.
+
+Latest local generation result:
+
+| Dataset stage | Samples |
+|---|---:|
+| Generated failure runs | 43 |
+| Failure classes | 16 |
+| Missing injected failures | 0 |
+| Diagnosis mismatches | 0 |
+| Recovery mismatches | 0 |
+| Deduplicated SFT train | 34 |
+| Held-out mutation eval | 9 |
 
 Output:
 
