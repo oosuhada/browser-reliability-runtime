@@ -32,6 +32,7 @@ async function main(): Promise<void> {
   const tracesRoot = path.resolve("artifacts", "traces");
   const directories = await readdir(tracesRoot, { withFileTypes: true });
   const samples: DatasetSample[] = [];
+  let legacyOrLeakySkipped = 0;
   for (const directory of directories) {
     if (!directory.isDirectory()) continue;
     const tracePath = path.join(tracesRoot, directory.name, "trace.json");
@@ -44,6 +45,21 @@ async function main(): Promise<void> {
     for (const step of trace.steps.filter((entry) => entry.phase === "FAILURE" && entry.groundTruth)) {
       const previous = step.actionHistory.at(-1) ?? null;
       if (!previous?.expectedState) {
+        legacyOrLeakySkipped += 1;
+        continue;
+      }
+      const modelFacingPayload = JSON.stringify({
+        url: step.observation.url,
+        accessibility: step.observation.accessibility,
+        pageText: step.observation.pageText,
+        actionHistory: step.actionHistory
+      });
+      if (
+        modelFacingPayload.includes("Injected mutation:") ||
+        modelFacingPayload.includes("Synthetic tenant: customer_") ||
+        modelFacingPayload.includes("mutation=")
+      ) {
+        legacyOrLeakySkipped += 1;
         continue;
       }
       samples.push({
@@ -75,7 +91,7 @@ async function main(): Promise<void> {
   await mkdir(path.resolve("artifacts", "datasets"), { recursive: true });
   const output = path.resolve("artifacts", "datasets", "workflowlens_failures.jsonl");
   await writeFile(output, samples.map((sample) => JSON.stringify(sample)).join("\n") + (samples.length ? "\n" : ""));
-  console.log(JSON.stringify({ samples: samples.length, output }, null, 2));
+  console.log(JSON.stringify({ samples: samples.length, legacyOrLeakySkipped, output }, null, 2));
 }
 
 main().catch((error) => {

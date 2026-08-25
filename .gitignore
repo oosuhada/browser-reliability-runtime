@@ -9,6 +9,7 @@ artifacts/reports/*
 !artifacts/reports/.gitkeep
 artifacts/datasets/*
 artifacts/grounding/*
+artifacts/local-llm-queue/*
 playwright-report/
 test-results/
 .DS_Store

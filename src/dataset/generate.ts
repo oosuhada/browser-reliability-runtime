@@ -35,8 +35,16 @@ const CASES: GenerationCase[] = [
 async function main(): Promise<void> {
   const startedAt = new Date().toISOString();
   const runs = [];
+  const requestedMutation = process.argv.find((value) => value.startsWith("--mutation="))?.slice("--mutation=".length);
+  const generationCases = requestedMutation
+    ? CASES.filter((generationCase) => generationCase.mutation === requestedMutation)
+    : CASES;
 
-  for (const generationCase of CASES) {
+  if (generationCases.length === 0) {
+    throw new Error(`Unknown or unsupported mutation filter: ${requestedMutation}`);
+  }
+
+  for (const generationCase of generationCases) {
     for (const orderId of generationCase.orderIds) {
       const trace = await runWorkflow({
         workflow: generationCase.workflow,

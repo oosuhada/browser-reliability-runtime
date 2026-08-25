@@ -32,6 +32,7 @@ function querySuffix(req: Request): string {
   const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
   const policy = getPolicy(typeof req.query.customer === "string" ? req.query.customer : undefined);
   const params = new URLSearchParams({ customer: policy.id, mutation: mutation.id });
+  if (req.query.debug === "1") params.set("debug", "1");
   return `?${params.toString()}`;
 }
 
@@ -76,21 +77,6 @@ function bboxOverlay(
   </div>`;
 }
 
-function pageMeta(state: WorkflowState, req: Request, targetIds: string[]): string {
-  const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
-  const policy = getPolicy(typeof req.query.customer === "string" ? req.query.customer : undefined);
-  const applied = mutationApplies(mutation, state);
-  return `<script>
-    window.__WORKFLOWLENS__ = ${JSON.stringify({
-      state,
-      mutation,
-      mutationApplied: applied,
-      policy,
-      targetIds
-    }).replaceAll("<", "\\u003c")};
-  </script>`;
-}
-
 function styles(): string {
   return `<style>
     :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f5f7fb; }
@@ -117,7 +103,7 @@ function styles(): string {
     .overlay { position: fixed; inset: 0; background: rgba(20, 26, 43, .52); display: grid; place-items: center; z-index: 100; }
     .modal { width: min(460px, calc(100% - 32px)); background: white; border-radius: 16px; padding: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.28); }
     .loading { position: fixed; inset: 0; background: rgba(245,247,251,.88); z-index: 90; display: grid; place-items: center; font-weight: 800; }
-    .moved { margin-left: auto; order: 99; transform: translateY(90px); }
+    .moved { margin-left: auto; order: 99; transform: translateY(180px); }
     .offscreen-spacer { height: 900px; border-radius: 12px; background: repeating-linear-gradient(135deg,#f8fafc,#f8fafc 12px,#f2f4f7 12px,#f2f4f7 24px); margin: 12px 0; display: grid; place-items: center; color: #98a2b3; }
     .hidden { display: none !important; }
     .compact-actions { position: fixed; right: 12px; bottom: 12px; flex-direction: column; padding: 10px; background: white; border: 1px solid #dce3ee; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.14); z-index: 20; }
@@ -130,8 +116,8 @@ function styles(): string {
 
 function shell(title: string, state: WorkflowState, req: Request, body: string, targetIds: string[] = []): string {
   const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
-  const policy = getPolicy(typeof req.query.customer === "string" ? req.query.customer : undefined);
   const applied = mutationApplies(mutation, state);
+  const debug = req.query.debug === "1";
   return `<!doctype html>
   <html lang="en">
   <head>
@@ -139,15 +125,14 @@ function shell(title: string, state: WorkflowState, req: Request, body: string, 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${esc(title)} · WorkflowLens Synthetic Commerce</title>
     ${styles()}
-    ${pageMeta(state, req, targetIds)}
   </head>
-  <body data-workflow-state="${state}" data-mutation="${mutation.id}" data-customer="${policy.id}">
+  <body data-workflow-state="${state}">
     <main class="shell">
       <header class="topbar">
         <div><div class="brand">WorkflowLens Synthetic Commerce</div><small>Controlled browser reliability testbed</small></div>
-        <div class="pill">Synthetic tenant: ${esc(policy.id)}</div>
+        <div class="pill">Synthetic tenant</div>
       </header>
-      ${applied ? `<div class="mut-banner" data-testid="mutation-banner"><strong>Injected mutation:</strong> ${esc(mutation.label)} — ${esc(mutation.description)}</div>` : ""}
+      ${applied && debug ? `<div class="mut-banner" data-testid="mutation-banner"><strong>Debug mutation:</strong> ${esc(mutation.label)} — ${esc(mutation.description)}</div>` : ""}
       ${body}
     </main>
   </body>
@@ -312,7 +297,7 @@ app.get("/", (req: Request, res: Response) => {
       function launch(workflow) {
         const customer = document.getElementById('customer').value;
         const mutation = document.getElementById('mutation').value;
-        window.location.href = '/login?customer=' + encodeURIComponent(customer) + '&mutation=' + encodeURIComponent(mutation) + '&workflow=' + encodeURIComponent(workflow);
+        window.location.href = '/login?customer=' + encodeURIComponent(customer) + '&mutation=' + encodeURIComponent(mutation) + '&workflow=' + encodeURIComponent(workflow) + '&debug=1';
       }
 
       async function runControlledDemo(workflow) {
@@ -414,7 +399,7 @@ app.get("/orders/:orderId", (req: Request, res: Response) => {
       <p><a href="/orders${suffix}">← Orders</a></p>
       <h1>${order.id}</h1>
       <div class="grid"><div><strong>Customer</strong><p>${esc(order.customer)}</p></div><div><strong>Total</strong><p>$${order.total.toFixed(2)}</p></div><div><strong>Status</strong><p>${order.status}</p></div><div><strong>Shipment</strong><p>${order.shipmentId}</p></div></div>
-      ${isOffscreen ? `<div class="offscreen-spacer">Injected content pushes primary action below viewport</div>` : ""}
+      ${isOffscreen ? `<div class="offscreen-spacer">Related order activity</div>` : ""}
       <div class="actions ${isResponsive ? "compact-actions" : ""}">
         <a class="btn secondary" data-target-id="shipment_lookup_button" href="${shipmentHref}" ${shipmentAria ? `aria-label="${esc(shipmentAria)}" title="Shipment lookup"` : ""}>${shipmentText}</a>
         ${refundButton}

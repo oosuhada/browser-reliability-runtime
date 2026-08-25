@@ -7,7 +7,7 @@ import { getMutation, type MutationId } from "../mutations.js";
 import { diagnoseFailure } from "../ai/diagnosis.js";
 import { applyPolicyGate, rankRecoveries } from "../ai/recovery.js";
 import { diagnoseWithVlm } from "../ai/vlm.js";
-import { captureObservation, getWorkflowState } from "./capture.js";
+import { captureObservation, getWorkflowState, sanitizeControlMetadataText, sanitizeWorkflowUrl } from "./capture.js";
 import type {
   ActionRecord,
   BrowserObservation,
@@ -114,7 +114,7 @@ async function recordStep(
 
 async function performAction(page: Page, action: TargetAction, history: ActionRecord[], relaxedLayout = false): Promise<ActionRecord> {
   const stateBefore = await getWorkflowState(page);
-  const urlBefore = page.url();
+  const urlBefore = sanitizeWorkflowUrl(page.url());
   let success = true;
   let error: string | null = null;
   try {
@@ -131,7 +131,7 @@ async function performAction(page: Page, action: TargetAction, history: ActionRe
     await page.waitForTimeout(120);
   } catch (caught) {
     success = false;
-    error = caught instanceof Error ? caught.message.slice(0, 1200) : String(caught);
+    error = sanitizeControlMetadataText(caught instanceof Error ? caught.message.slice(0, 1200) : String(caught));
   }
   const stateAfter = await getWorkflowState(page);
   const record: ActionRecord = {
@@ -144,7 +144,7 @@ async function performAction(page: Page, action: TargetAction, history: ActionRe
     stateBefore,
     stateAfter,
     urlBefore,
-    urlAfter: page.url()
+    urlAfter: sanitizeWorkflowUrl(page.url())
   };
   history.push(record);
   return record;
@@ -240,7 +240,7 @@ async function diagnoseAndRecover(
         screenshotPath: vlmInput,
         goal,
         previousAction: history.at(-1)?.name ?? null,
-        currentUrl: page.url(),
+        currentUrl: observation.url,
         dom: JSON.stringify(observation.interactiveElements),
         accessibility: observation.accessibility,
         customerPolicy: JSON.stringify(policy)
