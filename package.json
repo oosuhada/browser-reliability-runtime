@@ -15,7 +15,8 @@
     "dataset:export": "tsx src/dataset/export.ts",
     "dataset:grounding": "tsx src/dataset/grounding.ts",
     "evaluate:grounding": "tsx src/evaluation/grounding.ts",
-    "benchmark:runtime": "tsx src/evaluation/runtime.ts"
+    "benchmark:runtime": "tsx src/evaluation/runtime.ts",
+    "benchmark:policy": "tsx src/evaluation/policy.ts"
   },
   "dependencies": {
     "express": "^5.1.0"

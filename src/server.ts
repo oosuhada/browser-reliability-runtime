@@ -12,6 +12,8 @@ import { MUTATIONS, getMutation, mutationApplies, type MutationDefinition } from
 
 const app = express();
 const port = Number(process.env.PORT ?? 4317);
+let demoRunActive = false;
+let demoRunTimestamps: number[] = [];
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -129,6 +131,68 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true, service: "workflowlens-synthetic-commerce" });
 });
 
+app.post("/api/demo/run", async (req: Request, res: Response) => {
+  if (process.env.DEMO_BROWSER_RUNS_ENABLED !== "true") {
+    return res.status(503).json({
+      ok: false,
+      error: "Controlled browser demo runs are disabled on this deployment."
+    });
+  }
+
+  const workflow = String(req.body?.workflow ?? "");
+  const customer = String(req.body?.customer ?? "");
+  const mutation = String(req.body?.mutation ?? "");
+  const allowedWorkflows = new Set(["refund_order", "lookup_shipment"]);
+  const allowedCustomers = new Set(["customer_a", "customer_b"]);
+  const allowedMutations = new Set(Object.keys(MUTATIONS));
+
+  if (!allowedWorkflows.has(workflow) || !allowedCustomers.has(customer) || !allowedMutations.has(mutation)) {
+    return res.status(400).json({ ok: false, error: "Unsupported controlled demo configuration." });
+  }
+
+  const now = Date.now();
+  demoRunTimestamps = demoRunTimestamps.filter((timestamp) => now - timestamp < 60_000);
+  if (demoRunActive || demoRunTimestamps.length >= 6) {
+    return res.status(429).json({ ok: false, error: "The controlled demo runner is currently busy. Try again shortly." });
+  }
+
+  demoRunActive = true;
+  demoRunTimestamps.push(now);
+  try {
+    const { runWorkflow } = await import("./browser/runner.js");
+    const trace = await runWorkflow({
+      workflow: workflow as "refund_order" | "lookup_shipment",
+      customer: customer as "customer_a" | "customer_b",
+      mutation: mutation as keyof typeof MUTATIONS,
+      orderId: "ORD-18401",
+      modalities: {
+        screenshot: true,
+        dom: true,
+        history: true,
+        policy: true
+      },
+      headless: true,
+      visionStrategy: "on_failure",
+      reasoner: "heuristic"
+    });
+    return res.json({
+      ok: true,
+      runId: trace.runId,
+      success: trace.success,
+      safeEscalation: trace.safeEscalation,
+      viewerUrl: `/viewer/${trace.runId}`
+    });
+  } catch (error) {
+    console.error("Controlled demo run failed", error);
+    return res.status(500).json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Controlled demo run failed."
+    });
+  } finally {
+    demoRunActive = false;
+  }
+});
+
 app.get("/viewer", async (req: Request, res: Response) => {
   const root = path.resolve("artifacts", "traces");
   const entries = await readdir(root, { withFileTypes: true });
@@ -191,10 +255,12 @@ app.get("/", (req: Request, res: Response) => {
         <div><label for="mutation">Injected failure</label><select id="mutation">${options}</select></div>
       </div>
       <div class="actions">
-        <button class="btn" onclick="launch('refund_order')">Run refund workflow</button>
-        <button class="btn secondary" onclick="launch('lookup_shipment')">Run shipment workflow</button>
+        <button id="run-refund" class="btn" onclick="runControlledDemo('refund_order')">Run refund reliability demo</button>
+        <button id="run-shipment" class="btn secondary" onclick="runControlledDemo('lookup_shipment')">Run shipment reliability demo</button>
+        <button class="btn secondary" onclick="launch('refund_order')">Open synthetic app manually</button>
         <a class="btn secondary" href="/viewer">Open trace viewer</a>
       </div>
+      <div id="run-status" class="notice" style="display:none;margin-top:16px"></div>
     </section>
     <section class="card"><h2>Product boundary</h2><p>This application is intentionally synthetic. WorkflowLens sits above deterministic browser automation and focuses on failure detection, diagnosis, policy-aware recovery, verification, and explainability.</p></section>
     <script>
@@ -202,6 +268,32 @@ app.get("/", (req: Request, res: Response) => {
         const customer = document.getElementById('customer').value;
         const mutation = document.getElementById('mutation').value;
         window.location.href = '/login?customer=' + encodeURIComponent(customer) + '&mutation=' + encodeURIComponent(mutation) + '&workflow=' + encodeURIComponent(workflow);
+      }
+
+      async function runControlledDemo(workflow) {
+        const customer = document.getElementById('customer').value;
+        const mutation = document.getElementById('mutation').value;
+        const status = document.getElementById('run-status');
+        const buttons = [document.getElementById('run-refund'), document.getElementById('run-shipment')];
+        status.style.display = 'block';
+        status.classList.remove('success');
+        status.textContent = 'Running controlled local-browser workflow…';
+        for (const button of buttons) button.disabled = true;
+        try {
+          const response = await fetch('/api/demo/run', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workflow, customer, mutation })
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) throw new Error(payload.error || 'Demo run failed.');
+          status.classList.add('success');
+          status.textContent = 'Run complete. Opening the explainable trace…';
+          window.location.href = payload.viewerUrl;
+        } catch (error) {
+          status.textContent = error instanceof Error ? error.message : 'Demo run failed.';
+          for (const button of buttons) button.disabled = false;
+        }
       }
     </script>
   `));
