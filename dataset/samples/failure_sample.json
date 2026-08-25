@@ -6,6 +6,7 @@
   "order_id": "ORD-18401",
   "previous_state": "ORDER_DETAIL",
   "previous_action": "click_refund",
+  "expected_next_state": "REFUND",
   "current_state": "ORDER_DETAIL",
   "customer_policy": {
     "refundAutoExecuteLimit": 500,

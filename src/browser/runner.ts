@@ -2,7 +2,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { getPolicy, getOrder, requiresHumanApproval, type CustomerId, type RecoveryAction, type WorkflowId } from "../domain.js";
+import { getPolicy, getOrder, requiresHumanApproval, type CustomerId, type RecoveryAction, type WorkflowId, type WorkflowState } from "../domain.js";
 import { getMutation, type MutationId } from "../mutations.js";
 import { diagnoseFailure } from "../ai/diagnosis.js";
 import { applyPolicyGate, rankRecoveries } from "../ai/recovery.js";
@@ -36,7 +36,7 @@ interface TargetAction {
   targetId: string;
   brittleSelector: string;
   expectedLabel: string;
-  expectedState: string;
+  expectedState: WorkflowState | "TERMINAL";
 }
 
 function arg(name: string, fallback: string): string {
@@ -138,6 +138,7 @@ async function performAction(page: Page, action: TargetAction, history: ActionRe
     name: action.name,
     targetId: action.targetId,
     selector: action.brittleSelector,
+    expectedState: action.expectedState,
     success,
     error,
     stateBefore,

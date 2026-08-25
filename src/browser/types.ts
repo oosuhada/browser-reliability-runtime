@@ -52,6 +52,7 @@ export interface ActionRecord {
   name: string;
   targetId: string | null;
   selector: string | null;
+  expectedState: WorkflowState | "TERMINAL";
   success: boolean;
   error: string | null;
   stateBefore: WorkflowState;
