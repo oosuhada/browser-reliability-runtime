@@ -431,6 +431,7 @@ export async function runWorkflow(options: RunnerOptions): Promise<WorkflowTrace
     visionStrategy,
     reasoner,
     success,
+    taskCompleted: success && !safeEscalation,
     safeEscalation,
     visionFallbackCalls,
     vlmCalls: reasoner === "vlm" ? fallbackCalls : 0,
