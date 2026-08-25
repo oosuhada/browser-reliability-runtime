@@ -7,6 +7,19 @@ from pathlib import Path
 from typing import Any
 
 
+FAILURE_TAXONOMY = (
+    "AUTH_EXPIRED, CONFIRMATION_REQUIRED, DISABLED_ACTION, ELEMENT_MOVED, ELEMENT_RENAMED, "
+    "FORM_VALIDATION_ERROR, HIDDEN_ELEMENT, ICON_ONLY_TARGET, LOADING_STUCK, NAVIGATION_ERROR, "
+    "OCCLUDED_TARGET, OFFSCREEN_TARGET, PERMISSION_DENIED, RESPONSIVE_LAYOUT_CHANGE, STALE_STATE, "
+    "UNEXPECTED_MODAL, UNKNOWN_STATE"
+)
+
+RECOVERY_ACTIONS = (
+    "CLOSE_MODAL, REFRESH, SCROLL, REAUTHENTICATE, USE_ALTERNATIVE_TARGET, RETURN_PREVIOUS_STEP, "
+    "FILL_REQUIRED_FIELD, CONFIRM, CHANGE_VIEWPORT, ESCALATE_TO_HUMAN, ABORT, WAIT, RETRY"
+)
+
+
 def build_prompt(sample: dict[str, Any]) -> str:
     policy = sample.get("customer_policy")
     interactive = sample.get("dom_snapshot")
@@ -15,6 +28,8 @@ def build_prompt(sample: dict[str, Any]) -> str:
         [
             "You are WorkflowLens, a browser workflow reliability layer.",
             "Diagnose the automation failure and choose a safe recovery. Do not plan a general browser task.",
+            f"FAILURE TAXONOMY\n{FAILURE_TAXONOMY}",
+            f"RECOVERY ACTIONS\n{RECOVERY_ACTIONS}",
             f"GOAL\n{sample.get('goal')}",
             f"PREVIOUS STATE\n{sample.get('previous_state')}",
             f"PREVIOUS ACTION\n{sample.get('previous_action')}",
@@ -24,7 +39,7 @@ def build_prompt(sample: dict[str, Any]) -> str:
             f"ACCESSIBILITY\n{sample.get('accessibility_tree')}",
             f"ACTION HISTORY\n{json.dumps(history, ensure_ascii=False)}",
             f"CUSTOMER POLICY\n{json.dumps(policy, ensure_ascii=False)}",
-            "Return compact JSON with failure_type, target, blocker, recovery, reason.",
+            "Return compact JSON with failure_type, target, blocker, recovery, recovery_ranking, reason. recovery_ranking must contain the three best distinct recovery actions in order.",
         ]
     )
 
@@ -32,12 +47,17 @@ def build_prompt(sample: dict[str, Any]) -> str:
 def build_answer(sample: dict[str, Any]) -> str:
     failure = sample.get("failure") or {}
     diagnosis = sample.get("diagnosis") or {}
+    ranked = sample.get("recovery_ranking") or []
+    ranked_actions = [str(item.get("action")) for item in ranked if isinstance(item, dict) and item.get("action")]
+    expected_recovery = failure.get("expectedRecovery")
+    recovery_ranking = list(dict.fromkeys([expected_recovery, *ranked_actions]))[:3]
     return json.dumps(
         {
             "failure_type": failure.get("failureType"),
             "target": failure.get("target"),
             "blocker": failure.get("blocker"),
-            "recovery": failure.get("expectedRecovery"),
+            "recovery": expected_recovery,
+            "recovery_ranking": recovery_ranking,
             "reason": diagnosis.get("reason") or "Synthetic mutation ground truth.",
         },
         ensure_ascii=False,
@@ -66,14 +86,22 @@ def sample_signature(sample: dict[str, Any]) -> tuple[str, ...]:
 
 
 def to_sft_row(sample: dict[str, Any]) -> dict[str, Any]:
+    prompt = build_prompt(sample)
+    answer = build_answer(sample)
+    failure = sample.get("failure") or {}
     return {
         "sample_id": sample.get("sample_id"),
         "mutation": mutation_name(sample),
+        "prompt": prompt,
+        "expected": {
+            "failure_type": failure.get("failureType"),
+            "recovery": failure.get("expectedRecovery"),
+        },
         "text": (
             "<|im_start|>user\n"
-            + build_prompt(sample)
+            + prompt
             + "<|im_end|>\n<|im_start|>assistant\n"
-            + build_answer(sample)
+            + answer
             + "<|im_end|>"
         ),
     }

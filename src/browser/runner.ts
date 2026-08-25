@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import { getPolicy, getOrder, requiresHumanApproval, type CustomerId, type RecoveryAction, type WorkflowId, type WorkflowState } from "../domain.js";
 import { getMutation, type MutationId } from "../mutations.js";
 import { diagnoseFailure } from "../ai/diagnosis.js";
-import { applyPolicyGate, rankRecoveries } from "../ai/recovery.js";
+import { applyPolicyGate, rankModelRecoveries, rankRecoveries } from "../ai/recovery.js";
 import { diagnoseWithVlm } from "../ai/vlm.js";
 import { captureObservation, getWorkflowState, sanitizeControlMetadataText, sanitizeWorkflowUrl } from "./capture.js";
 import type {
@@ -69,13 +69,13 @@ async function screenshot(page: Page, directory: string, index: number, label: s
   return filename;
 }
 
-function groundTruth(options: RunnerOptions): GroundTruth | null {
+function groundTruth(options: RunnerOptions, targetId?: string): GroundTruth | null {
   const mutation = getMutation(options.mutation);
   if (mutation.id === "none") return null;
   return {
     mutation: mutation.id,
     failureType: mutation.failureType,
-    target: mutation.targetId,
+    target: targetId ?? mutation.targetId,
     blocker: mutation.blocker,
     expectedRecovery: mutation.expectedRecovery
   };
@@ -172,7 +172,9 @@ async function executeRecovery(page: Page, action: RecoveryAction, target: Targe
     }
     if (action === "REAUTHENTICATE") {
       const current = new URL(page.url());
-      const currentPath = current.pathname.includes("/refund") ? current.pathname : `/orders/${options.orderId}`;
+      const currentPath = current.pathname.includes("/refund") || current.pathname.includes("/approvals/")
+        ? current.pathname
+        : `/orders/${options.orderId}`;
       await page.goto(withParams("/login", options, "none"));
       await page.locator("#login-form").evaluate((form: HTMLFormElement) => form.requestSubmit());
       await page.waitForURL(/\/orders/);
@@ -232,6 +234,7 @@ async function diagnoseAndRecover(
     modalities: options.modalities
   });
   let diagnosis = heuristicDiagnosis;
+  let modelCandidateRecoveries: string[] | null = null;
   if (options.reasoner === "vlm" && options.modalities.screenshot) {
     try {
       const vlmInput = path.join(directory, `vlm_${steps.length}.png`);
@@ -253,6 +256,7 @@ async function diagnoseAndRecover(
         evidence: Array.isArray(vlm.evidence) ? vlm.evidence : [],
         reason: vlm.reason || "Live VLM diagnosis"
       };
+      modelCandidateRecoveries = vlm.candidate_recovery;
     } catch (error) {
       diagnosis = {
         ...heuristicDiagnosis,
@@ -263,12 +267,14 @@ async function diagnoseAndRecover(
       };
     }
   }
-  const ranked = rankRecoveries(diagnosis);
+  const ranked = modelCandidateRecoveries
+    ? rankModelRecoveries(diagnosis, modelCandidateRecoveries)
+    : rankRecoveries(diagnosis);
   let selected = ranked[0].action;
   const gate = options.modalities.policy ? applyPolicyGate(selected, policy, refundAmount) : { decision: "ALLOW" as const, reason: "Policy modality disabled for this run." };
   if (gate.decision === "ESCALATE") selected = "ESCALATE_TO_HUMAN";
   await recordStep(steps, page, directory, "FAILURE", target.targetId, history, {
-    groundTruth: groundTruth(options),
+    groundTruth: groundTruth(options, target.targetId),
     diagnosis,
     rankedRecoveries: ranked,
     policyDecision: gate,
@@ -278,7 +284,7 @@ async function diagnoseAndRecover(
   const recoverySucceeded = await executeRecovery(page, selected, target, options);
   failureStep.recoverySucceeded = recoverySucceeded;
   await recordStep(steps, page, directory, "RECOVERY", target.targetId, history, {
-    groundTruth: groundTruth(options),
+    groundTruth: groundTruth(options, target.targetId),
     diagnosis,
     rankedRecoveries: ranked,
     policyDecision: gate,
@@ -331,7 +337,11 @@ export async function runWorkflow(options: RunnerOptions): Promise<WorkflowTrace
   await mkdir(directory, { recursive: true });
   const history: ActionRecord[] = [];
   const steps: TraceStep[] = [];
-  const goal = options.workflow === "refund_order" ? `Refund ${options.orderId} according to customer policy` : `Look up shipment for ${options.orderId}`;
+  const goal = options.workflow === "refund_order"
+    ? `Refund ${options.orderId} according to customer policy`
+    : options.workflow === "approve_refund"
+      ? `Review and approve refund request for ${options.orderId}`
+      : `Look up shipment for ${options.orderId}`;
   let browser: Browser | null = null;
   let success = false;
   let safeEscalation = false;
@@ -342,7 +352,22 @@ export async function runWorkflow(options: RunnerOptions): Promise<WorkflowTrace
     await page.goto(withParams("/login", options));
     await page.locator("#login-form").evaluate((form: HTMLFormElement) => form.requestSubmit());
     await page.waitForURL(/\/orders/);
-    await page.locator(`[data-target-id="order_${options.orderId}"]`).click();
+
+    if (options.workflow === "approve_refund") {
+      await page.goto(withParams("/approvals", options));
+      await page.locator(`[data-target-id="approval_${options.orderId}"]`).click();
+      const approval = await runTargetAction(page, {
+        name: "approve_refund_request",
+        targetId: "approve_refund_button",
+        brittleSelector: 'button:has-text("Approve refund")',
+        expectedLabel: "approve refund",
+        expectedState: "TERMINAL"
+      }, options, history, steps, directory, goal, null);
+      success = approval.ok;
+      safeEscalation = approval.escalated;
+    } else {
+      await page.locator(`[data-target-id="order_${options.orderId}"]`).click();
+    }
 
     if (options.workflow === "lookup_shipment") {
       const shipment = await runTargetAction(page, {
@@ -354,7 +379,7 @@ export async function runWorkflow(options: RunnerOptions): Promise<WorkflowTrace
       }, options, history, steps, directory, goal, null);
       success = shipment.ok;
       safeEscalation = shipment.escalated;
-    } else {
+    } else if (options.workflow === "refund_order") {
       const openRefund = await runTargetAction(page, {
         name: "click_refund",
         targetId: "refund_button",

@@ -38,7 +38,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: null,
     blocker: null,
     expectedRecovery: "NONE",
-    applicableStates: ["LOGIN", "ORDERS", "ORDER_DETAIL", "SHIPMENT", "REFUND"],
+    applicableStates: ["LOGIN", "ORDERS", "ORDER_DETAIL", "SHIPMENT", "REFUND", "APPROVAL_QUEUE", "APPROVAL_DETAIL"],
     description: "Normal workflow without an injected failure."
   },
   cookie_overlay: {
@@ -58,7 +58,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: "shipment_lookup_button",
     blocker: "announcement_modal",
     expectedRecovery: "CLOSE_MODAL",
-    applicableStates: ["ORDER_DETAIL"],
+    applicableStates: ["ORDER_DETAIL", "APPROVAL_DETAIL"],
     description: "An unexpected announcement modal intercepts pointer events."
   },
   element_moved: {
@@ -98,7 +98,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: "refund_button",
     blocker: "session_expired_modal",
     expectedRecovery: "REAUTHENTICATE",
-    applicableStates: ["ORDER_DETAIL", "REFUND"],
+    applicableStates: ["ORDER_DETAIL", "REFUND", "APPROVAL_DETAIL"],
     description: "The session expires immediately before a protected action."
   },
   validation_error: {
@@ -168,7 +168,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: "execute_refund_button",
     blocker: "permission_banner",
     expectedRecovery: "ESCALATE_TO_HUMAN",
-    applicableStates: ["REFUND"],
+    applicableStates: ["REFUND", "APPROVAL_DETAIL"],
     description: "The current operator lacks the permission required to execute a refund."
   },
   confirmation_required: {
@@ -178,7 +178,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: "execute_refund_button",
     blocker: "confirmation_modal",
     expectedRecovery: "CONFIRM",
-    applicableStates: ["REFUND"],
+    applicableStates: ["REFUND", "APPROVAL_DETAIL"],
     description: "An extra safety confirmation is inserted before execution."
   },
   stale_state: {
@@ -188,7 +188,7 @@ export const MUTATIONS: Record<MutationId, MutationDefinition> = {
     targetId: "execute_refund_button",
     blocker: "stale_state_banner",
     expectedRecovery: "REFRESH",
-    applicableStates: ["REFUND"],
+    applicableStates: ["REFUND", "APPROVAL_DETAIL"],
     description: "The order changed after the page loaded and requires a refresh."
   },
   unexpected_navigation: {

@@ -21,12 +21,44 @@ const RECOVERY_MAP: Record<string, RecoveryAction[]> = {
   UNKNOWN_STATE: ["ESCALATE_TO_HUMAN", "REFRESH", "RETURN_PREVIOUS_STEP"]
 };
 
+const VALID_RECOVERY_ACTIONS = new Set<RecoveryAction>([
+  "NONE",
+  "RETRY",
+  "SCROLL",
+  "CLOSE_MODAL",
+  "REFRESH",
+  "REAUTHENTICATE",
+  "USE_ALTERNATIVE_TARGET",
+  "RETURN_PREVIOUS_STEP",
+  "WAIT",
+  "CHANGE_VIEWPORT",
+  "ESCALATE_TO_HUMAN",
+  "FILL_REQUIRED_FIELD",
+  "CONFIRM",
+  "ABORT"
+]);
+
 export function rankRecoveries(diagnosis: FailureDiagnosis): RankedRecovery[] {
   const actions = RECOVERY_MAP[diagnosis.failureType] ?? ["ESCALATE_TO_HUMAN", "REFRESH", "ABORT"];
   return actions.map((action, index) => ({
     action,
     score: Math.max(0.05, Number((diagnosis.confidence - index * 0.22).toFixed(3))),
     reason: index === 0 ? `Primary recovery for ${diagnosis.failureType}.` : `Fallback candidate #${index + 1}.`
+  }));
+}
+
+export function rankModelRecoveries(diagnosis: FailureDiagnosis, candidates: string[]): RankedRecovery[] {
+  const modelActions = candidates
+    .map((action) => action.trim().toUpperCase())
+    .filter((action): action is RecoveryAction => VALID_RECOVERY_ACTIONS.has(action as RecoveryAction));
+  const heuristicActions = rankRecoveries(diagnosis).map((item) => item.action);
+  const actions = [...new Set([...modelActions, ...heuristicActions])].slice(0, 3);
+  return actions.map((action, index) => ({
+    action,
+    score: Math.max(0.05, Number((diagnosis.confidence - index * 0.16).toFixed(3))),
+    reason: modelActions.includes(action)
+      ? `VLM-ranked recovery candidate #${modelActions.indexOf(action) + 1}.`
+      : `Heuristic fallback added after VLM ranking.`
   }));
 }
 

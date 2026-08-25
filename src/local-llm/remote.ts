@@ -137,10 +137,11 @@ function prompt(evidence: LocalLlmEvidence): string {
     "You are WorkflowLens, a browser workflow reliability layer.",
     "Diagnose why an existing browser automation step failed. Do not plan a general browsing task.",
     "Use only the evidence below. Return JSON only.",
-    "Required keys: failure_type, recovery, confidence, reason.",
+    "Required keys: failure_type, recovery, recovery_ranking, confidence, reason.",
     "failure_type must be exactly one of: AUTH_EXPIRED, CONFIRMATION_REQUIRED, DISABLED_ACTION, ELEMENT_MOVED, ELEMENT_RENAMED, FORM_VALIDATION_ERROR, HIDDEN_ELEMENT, ICON_ONLY_TARGET, LOADING_STUCK, NAVIGATION_ERROR, OCCLUDED_TARGET, OFFSCREEN_TARGET, PERMISSION_DENIED, RESPONSIVE_LAYOUT_CHANGE, STALE_STATE, UNEXPECTED_MODAL, UNKNOWN_STATE.",
     "Taxonomy semantics: AUTH_EXPIRED=session/login expired; CONFIRMATION_REQUIRED=extra confirmation step; DISABLED_ACTION=target present but disabled; ELEMENT_MOVED=target relocated; ELEMENT_RENAMED=label changed; FORM_VALIDATION_ERROR=required form input missing or invalid; HIDDEN_ELEMENT=primary target hidden; ICON_ONLY_TARGET=text target became icon-only; LOADING_STUCK=loading blocker does not resolve; NAVIGATION_ERROR=action led to the wrong workflow state or page; OCCLUDED_TARGET=overlay visually blocks target; OFFSCREEN_TARGET=target exists outside viewport; PERMISSION_DENIED=operator lacks permission; RESPONSIVE_LAYOUT_CHANGE=responsive or fixed layout changed target geometry; STALE_STATE=page data is stale and needs refresh; UNEXPECTED_MODAL=unrelated modal interrupts workflow; UNKNOWN_STATE=evidence is insufficient for another class.",
-    "Recovery must be a single concrete recovery action such as CLOSE_MODAL, REFRESH, SCROLL, REAUTHENTICATE, USE_ALTERNATIVE_TARGET, RETURN_PREVIOUS_STEP, FILL_REQUIRED_FIELD, CONFIRM, CHANGE_VIEWPORT, ESCALATE_TO_HUMAN, ABORT, WAIT, or RETRY.",
+    "Recovery must be the highest-ranked concrete recovery action.",
+    "recovery_ranking must contain exactly the three best distinct recovery actions, ordered best to worst, chosen from: CLOSE_MODAL, REFRESH, SCROLL, REAUTHENTICATE, USE_ALTERNATIVE_TARGET, RETURN_PREVIOUS_STEP, FILL_REQUIRED_FIELD, CONFIRM, CHANGE_VIEWPORT, ESCALATE_TO_HUMAN, ABORT, WAIT, RETRY.",
     `GOAL\n${evidence.goal}`,
     `PREVIOUS STATE\n${evidence.previousState ?? "unknown"}`,
     `PREVIOUS ACTION\n${evidence.previousAction ?? "unknown"}`,
@@ -159,9 +160,15 @@ function extractJson(content: string): LocalLlmPrediction {
   const end = trimmed.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error(`Model response did not contain a JSON object: ${content.slice(0, 500)}`);
   const parsed = JSON.parse(trimmed.slice(start, end + 1)) as Partial<LocalLlmPrediction>;
+  const ranking = Array.isArray(parsed.recovery_ranking)
+    ? parsed.recovery_ranking.map((value) => String(value).trim().toUpperCase()).filter(Boolean)
+    : [];
+  const recovery = String(parsed.recovery ?? ranking[0] ?? "ESCALATE_TO_HUMAN").trim().toUpperCase();
+  const deduplicatedRanking = [...new Set([recovery, ...ranking])].slice(0, 3);
   return {
     failure_type: String(parsed.failure_type ?? "UNKNOWN_STATE").trim().toUpperCase(),
-    recovery: String(parsed.recovery ?? "ESCALATE_TO_HUMAN").trim().toUpperCase(),
+    recovery,
+    recovery_ranking: deduplicatedRanking,
     confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
     reason: String(parsed.reason ?? "")
   };

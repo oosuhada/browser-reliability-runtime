@@ -1,6 +1,6 @@
 export type CustomerId = "customer_a" | "customer_b";
 
-export type WorkflowId = "refund_order" | "lookup_shipment";
+export type WorkflowId = "refund_order" | "lookup_shipment" | "approve_refund";
 
 export type WorkflowState =
   | "LOGIN"
@@ -9,6 +9,8 @@ export type WorkflowState =
   | "SHIPMENT"
   | "REFUND"
   | "APPROVAL_REQUIRED"
+  | "APPROVAL_QUEUE"
+  | "APPROVAL_DETAIL"
   | "COMPLETE"
   | "AUTH_INTERRUPTED"
   | "PERMISSION_BLOCKED"

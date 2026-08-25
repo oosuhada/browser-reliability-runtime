@@ -20,17 +20,27 @@ async function main(): Promise<void> {
   const predictedFailures = rows.map((job) => job.result.prediction.failure_type);
   const classification = classificationMetrics(expectedFailures, predictedFailures);
   const recoveryCorrect = rows.filter((job) => job.expected.recovery === job.result.prediction.recovery).length;
+  const recoveryTop3Correct = rows.filter((job) => {
+    const ranking = job.result.prediction.recovery_ranking?.length
+      ? job.result.prediction.recovery_ranking
+      : [job.result.prediction.recovery];
+    return ranking.slice(0, 3).includes(job.expected.recovery);
+  }).length;
   const averageLatencyMs = rows.length
     ? Math.round(rows.reduce((sum, job) => sum + job.result.latencyMs, 0) / rows.length)
     : 0;
   const report = {
+    schema: "workflowlens.model-benchmark.v1",
+    benchmarkType: "local_llm",
     batchId,
     samples: rows.length,
     failureAccuracy: classification.accuracy,
     failureMacroF1: classification.macroF1,
     recoveryTop1Accuracy: rows.length ? recoveryCorrect / rows.length : 0,
+    recoveryTop3Accuracy: rows.length ? recoveryTop3Correct / rows.length : 0,
     averageLatencyMs,
     models: [...new Set(rows.map((job) => job.result.model))],
+    modalities: [...new Set(rows.map((job) => job.requiresVision ? "vision+structured" : "structured-text"))],
     byClass: classification.byClass,
     confusion: classification.confusion
   };

@@ -39,6 +39,7 @@ export interface LocalLlmQueueJob {
 export interface LocalLlmPrediction {
   failure_type: string;
   recovery: string;
+  recovery_ranking: string[];
   confidence: number;
   reason: string;
 }
