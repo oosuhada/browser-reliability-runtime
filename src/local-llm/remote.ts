@@ -28,6 +28,20 @@ function requestTimeoutMs(): number {
   return Number(process.env.WORKFLOWLENS_LLM_REQUEST_TIMEOUT_MS ?? 15 * 60_000);
 }
 
+function respectRemoteBusy(): boolean {
+  return process.env.WORKFLOWLENS_LLM_RESPECT_REMOTE_BUSY !== "false";
+}
+
+function endpointPort(): number {
+  try {
+    const parsed = new URL(endpoint());
+    if (parsed.port) return Number(parsed.port);
+    return parsed.protocol === "https:" ? 443 : 80;
+  } catch {
+    return 1234;
+  }
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
@@ -67,6 +81,38 @@ async function sshCurl(url: string, body?: unknown): Promise<string> {
     });
     if (body === undefined) child.stdin.end();
     else child.stdin.end(JSON.stringify(body));
+  });
+}
+
+export async function isRemoteInferenceBusy(): Promise<boolean> {
+  if (!respectRemoteBusy()) return false;
+  const port = endpointPort();
+  const command = `lsof -nP -iTCP:${port} -sTCP:ESTABLISHED -t 2>/dev/null | head -1 || true`;
+  return await new Promise<boolean>((resolve, reject) => {
+    const child = spawn("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", sshHost(), command], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Remote busy probe timed out."));
+    }, 15_000);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(stdout.trim().length > 0);
+      else reject(new Error(`Remote busy probe failed (${code ?? "unknown"}): ${stderr}`));
+    });
   });
 }
 

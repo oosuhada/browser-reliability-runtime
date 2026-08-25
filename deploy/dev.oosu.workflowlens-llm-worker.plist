@@ -26,6 +26,8 @@
     <string>900000</string>
     <key>WORKFLOWLENS_LLM_IDLE_POLL_MS</key>
     <string>30000</string>
+    <key>WORKFLOWLENS_LLM_RESPECT_REMOTE_BUSY</key>
+    <string>true</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

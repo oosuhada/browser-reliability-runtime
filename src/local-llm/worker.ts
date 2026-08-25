@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ensureQueueDirectories, isQueuePaused, listJobFiles, moveJob, queueDirectory, readJob, recoverStaleRunning } from "./queue.js";
-import { resolveLoadedModel, runRemoteDiagnosis } from "./remote.js";
+import { isRemoteInferenceBusy, resolveLoadedModel, runRemoteDiagnosis } from "./remote.js";
 import type { LocalLlmCompletedJob, LocalLlmQueueJob, LocalLlmQueueStatus } from "./types.js";
 
 function hasArg(name: string): boolean {
@@ -32,6 +32,11 @@ async function processOne(): Promise<boolean> {
   const next = await candidate();
   if (!next) return false;
   const sourceJob = await readJob(next.filename, next.status);
+  try {
+    if (await isRemoteInferenceBusy()) return false;
+  } catch {
+    return false;
+  }
   let model;
   try {
     model = await resolveLoadedModel(sourceJob.requiresVision, sourceJob.requestedModel);

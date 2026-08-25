@@ -1,5 +1,5 @@
 import { isQueuePaused, listJobFiles, readJob } from "./queue.js";
-import { listRemoteModels } from "./remote.js";
+import { isRemoteInferenceBusy, listRemoteModels } from "./remote.js";
 
 function hasArg(name: string): boolean {
   return process.argv.includes(`--${name}`);
@@ -26,8 +26,10 @@ async function main(): Promise<void> {
   let remote: unknown = undefined;
   if (hasArg("remote")) {
     try {
+      const busy = await isRemoteInferenceBusy();
       const models = await listRemoteModels();
       remote = {
+        busy,
         loaded: models.filter((model) => model.state === "loaded"),
         availableVisionModels: models.filter((model) => model.type === "vlm").map((model) => model.id)
       };

@@ -393,6 +393,8 @@ node dist/local-llm/worker.js --watch
 
 The repository also includes `deploy/dev.oosu.workflowlens-llm-worker.plist` for a MacBook Air `launchd` worker. The worker never loads or unloads LM Studio models. A text job uses an already loaded LLM/VLM. A vision job is moved to `blocked` when no VLM is loaded and is retried automatically by the watch worker after a compatible VLM becomes available.
 
+The worker also respects existing LM Studio traffic by default. Before claiming a queued job it checks whether the LM Studio port already has an established inference connection. If another local agent is generating, WorkflowLens leaves its job untouched and retries on a later poll instead of competing for the same model. Set `WORKFLOWLENS_LLM_RESPECT_REMOTE_BUSY=false` only when concurrent inference is intentional.
+
 Enqueue screenshot-aware jobs after loading a VLM in LM Studio:
 
 ```bash
