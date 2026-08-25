@@ -1,0 +1,21 @@
+{
+  "sample_id": "synthetic_shipment_grounding_example",
+  "instruction": "Click the shipment lookup button",
+  "mutation": "none",
+  "target_id": "shipment_lookup_button",
+  "bbox": {
+    "x": 115.0,
+    "y": 452.9,
+    "width": 161.0,
+    "height": 42.0
+  },
+  "center": {
+    "x": 195.5,
+    "y": 473.9
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  }
+}
+

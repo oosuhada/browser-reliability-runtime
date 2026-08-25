@@ -1,0 +1,37 @@
+{
+  "sample_id": "synthetic_cookie_overlay_example",
+  "goal": "Refund ORD-18401 according to customer policy",
+  "workflow": "refund_order",
+  "customer": "customer_a",
+  "order_id": "ORD-18401",
+  "previous_state": "ORDER_DETAIL",
+  "previous_action": "click_refund",
+  "current_state": "ORDER_DETAIL",
+  "customer_policy": {
+    "refundAutoExecuteLimit": 500,
+    "requireApprovalForAllRefunds": false,
+    "allowForceClick": false,
+    "modalStrategy": "close_then_retry"
+  },
+  "failure": {
+    "mutation": "cookie_overlay",
+    "failureType": "OCCLUDED_TARGET",
+    "target": "refund_button",
+    "blocker": "cookie_consent_modal",
+    "expectedRecovery": "CLOSE_MODAL"
+  },
+  "target_bbox": {
+    "x": 286.0,
+    "y": 452.9,
+    "width": 131.5,
+    "height": 42.0
+  },
+  "blocker_bbox": {
+    "x": 0,
+    "y": 0,
+    "width": 1280,
+    "height": 720
+  },
+  "recovery_success": true
+}
+
