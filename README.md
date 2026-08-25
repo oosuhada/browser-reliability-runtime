@@ -214,14 +214,15 @@ Latest local run over all 16 mutation categories:
 
 | Metric | Result |
 |---|---:|
-| Workflow success | 100% |
+| Workflow resolution | 100% |
+| Task completion | 87.5% |
+| Safe escalation | 12.5% |
 | Diagnosis coverage | 100% |
 | Failure accuracy | 100% |
 | Failure Macro-F1 | 100% |
 | Recovery Top-1 | 100% |
-| Recovery Top-3 | 100% |
-| Recovery execution success | 100% |
-| Avg. browser runtime | 933 ms |
+| Expected recovery success | 100% |
+| Avg. browser runtime | 1328 ms |
 | Avg. vision fallback opportunities | 1.0 |
 | Actual live VLM calls | 0 |
 
@@ -237,14 +238,16 @@ npm run benchmark -- --all-modalities
 
 Representative five-case ablation (`cookie_overlay`, `element_renamed`, `validation_error`, `permission_denied`, `unexpected_navigation`):
 
-| Input | Workflow success | Failure accuracy | Macro-F1 | Recovery Top-1 |
-|---|---:|---:|---:|---:|
-| Screenshot only | 60% | 20% | 14.3% | 20% |
-| Screenshot + DOM | 100% | 80% | 66.7% | 80% |
-| Screenshot + DOM + History | 100% | 100% | 100% | 100% |
-| Screenshot + DOM + History + Policy | 100% | 100% | 100% | 100% |
+| Input | Task completion | Safe resolution | Failure accuracy | Macro-F1 | Recovery Top-1 |
+|---|---:|---:|---:|---:|---:|
+| Screenshot only | 20% | 100% | 20% | 16.7% | 40% |
+| Screenshot + DOM | 60% | 100% | 80% | 66.7% | 80% |
+| Screenshot + DOM + History | 80% | 100% | 100% | 100% | 100% |
+| Screenshot + DOM + History + Policy | 80% | 100% | 100% | 100% | 100% |
 
 The most illustrative temporal case is `unexpected_navigation`: the current page alone is an unknown maintenance state. Action history is what establishes that a successful shipment click produced the wrong state transition.
+
+`Safe resolution` includes deliberate human escalation. `Task completion` is stricter and counts only workflows that reached the requested autonomous terminal state. This distinction prevents an unnecessary escalation from being reported as successful task execution.
 
 ## Customer-specific policy experiment
 
@@ -290,11 +293,11 @@ npm run benchmark:runtime
 
 Five-scenario local comparison:
 
-| Strategy | Success | Avg. vision opportunities | Measured browser runtime | Estimated E2E latency* | Estimated inference cost* |
-|---|---:|---:|---:|---:|---:|
-| Always Vision | 100% | 1.6 | 1199 ms | 2479 ms | $0.0032 |
-| Vision on Failure | 100% | 0.8 | 1006 ms | 1646 ms | $0.0016 |
-| Vision on Low Confidence | 100% | 0.8 | 1009 ms | 1649 ms | $0.0016 |
+| Strategy | Resolution | Task completion | Avg. vision opportunities | Measured browser runtime | Estimated E2E latency* | Estimated inference cost* |
+|---|---:|---:|---:|---:|---:|---:|
+| Always Vision | 100% | 100% | 1.6 | 1848 ms | 3128 ms | $0.0032 |
+| Vision on Failure | 100% | 100% | 0.8 | 1163 ms | 1803 ms | $0.0016 |
+| Vision on Low Confidence | 100% | 100% | 0.8 | 1128 ms | 1768 ms | $0.0016 |
 
 `*` VLM latency/cost are configurable estimates (`800 ms` and `$0.002` per call by default). Browser runtime is measured locally. No external API was called for this table.
 

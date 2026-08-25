@@ -74,7 +74,8 @@ async function main(): Promise<void> {
     let recoveryTop1 = 0;
     let recoveryTop3 = 0;
     let diagnosed = 0;
-    let recoverySuccess = 0;
+    let recoveryExecutionSuccess = 0;
+    let expectedRecoverySuccess = 0;
     for (const trace of selected) {
       const failure = trace.steps.find((step) => step.phase === "FAILURE" && step.groundTruth);
       if (!failure?.groundTruth) {
@@ -87,18 +88,22 @@ async function main(): Promise<void> {
       predicted.push(failure.diagnosis?.failureType ?? "MISSED");
       if (failure.rankedRecoveries[0]?.action === failure.groundTruth.expectedRecovery) recoveryTop1 += 1;
       if (failure.rankedRecoveries.slice(0, 3).some((entry) => entry.action === failure.groundTruth!.expectedRecovery)) recoveryTop3 += 1;
-      if (failure.recoverySucceeded) recoverySuccess += 1;
+      if (failure.recoverySucceeded) recoveryExecutionSuccess += 1;
+      if (failure.recoverySucceeded && failure.executedRecovery === failure.groundTruth.expectedRecovery) expectedRecoverySuccess += 1;
     }
     const classification = classificationMetrics(expected, predicted);
     report[mode] = {
       cases: selected.length,
-      workflowSuccessRate: selected.filter((trace) => trace.success).length / selected.length,
+      workflowResolutionRate: selected.filter((trace) => trace.success).length / selected.length,
+      taskCompletionRate: selected.filter((trace) => trace.taskCompleted).length / selected.length,
+      safeEscalationRate: selected.filter((trace) => trace.safeEscalation).length / selected.length,
       diagnosisCoverage: diagnosed / selected.length,
       failureAccuracy: classification.accuracy,
       failureMacroF1: classification.macroF1,
       recoveryTop1Accuracy: diagnosed === 0 ? 0 : recoveryTop1 / diagnosed,
       recoveryTop3Accuracy: diagnosed === 0 ? 0 : recoveryTop3 / diagnosed,
-      recoverySuccessRate: diagnosed === 0 ? 0 : recoverySuccess / diagnosed,
+      recoveryExecutionSuccessRate: diagnosed === 0 ? 0 : recoveryExecutionSuccess / diagnosed,
+      expectedRecoverySuccessRate: diagnosed === 0 ? 0 : expectedRecoverySuccess / diagnosed,
       averageVisionFallbackCalls: selected.reduce((sum, trace) => sum + trace.visionFallbackCalls, 0) / selected.length,
       averageVlmCalls: selected.reduce((sum, trace) => sum + trace.vlmCalls, 0) / selected.length,
       averageLatencyMs: Math.round(selected.reduce((sum, trace) => sum + trace.durationMs, 0) / selected.length),

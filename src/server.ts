@@ -179,6 +179,7 @@ app.post("/api/demo/run", async (req: Request, res: Response) => {
       ok: true,
       runId: trace.runId,
       success: trace.success,
+      taskCompleted: trace.taskCompleted,
       safeEscalation: trace.safeEscalation,
       viewerUrl: `/viewer/${trace.runId}`
     });
@@ -219,6 +220,7 @@ app.get("/viewer/:runId", async (req: Request, res: Response) => {
       mutation: string;
       customer: string;
       success: boolean;
+      taskCompleted?: boolean;
       safeEscalation: boolean;
       durationMs: number;
       vlmCalls: number;
@@ -235,8 +237,9 @@ app.get("/viewer/:runId", async (req: Request, res: Response) => {
         recoverySucceeded: boolean | null;
       }>;
     };
+    const taskCompleted = trace.taskCompleted ?? (trace.success && !trace.safeEscalation);
     const timeline = trace.steps.map((step) => `<section class="card"><div class="topbar"><div><strong>#${step.index} · ${esc(step.phase)}</strong><div>${esc(step.observation.workflowState)}</div></div><span class="pill">${esc(step.observation.url)}</span></div><div class="grid"><div><img src="/artifacts/traces/${encodeURIComponent(runId)}/${encodeURIComponent(step.screenshot)}" alt="Trace screenshot ${step.index}" style="width:100%;border:1px solid #e2e7f0;border-radius:12px" /></div><div>${step.action ? `<h3>Action</h3><p>${esc(step.action.name)} · ${step.action.success ? "success" : "failed"}</p>${step.action.error ? `<pre style="white-space:pre-wrap">${esc(step.action.error)}</pre>` : ""}` : ""}${step.diagnosis ? `<h3>Diagnosis</h3><p><strong>${esc(step.diagnosis.failureType)}</strong> · ${(step.diagnosis.confidence * 100).toFixed(0)}%</p><p>${esc(step.diagnosis.reason)}</p><ul>${step.diagnosis.evidence.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}${step.rankedRecoveries.length ? `<h3>Recovery ranking</h3><ol>${step.rankedRecoveries.map((item) => `<li>${esc(item.action)} · ${item.score.toFixed(2)}</li>`).join("")}</ol>` : ""}${step.policyDecision ? `<h3>Policy</h3><p>${esc(step.policyDecision.decision)} — ${esc(step.policyDecision.reason)}</p>` : ""}${step.executedRecovery ? `<h3>Executed</h3><p>${esc(step.executedRecovery)} · ${step.recoverySucceeded ? "success" : "failed"}</p>` : ""}</div></div></section>`).join("");
-    return res.send(shell(`Trace ${runId}`, "UNKNOWN", req, `<section class="card"><p><a href="/viewer">← All traces</a></p><h1>${esc(trace.goal)}</h1><div class="grid"><div><strong>Workflow</strong><p>${esc(trace.workflow)}</p></div><div><strong>Mutation</strong><p>${esc(trace.mutation)}</p></div><div><strong>Customer</strong><p>${esc(trace.customer)}</p></div><div><strong>Outcome</strong><p>${trace.success ? "SUCCESS" : "FAILED"}${trace.safeEscalation ? " · SAFE ESCALATION" : ""}</p></div><div><strong>Latency</strong><p>${trace.durationMs} ms</p></div><div><strong>Vision calls</strong><p>${trace.vlmCalls}</p></div></div></section>${timeline}`));
+    return res.send(shell(`Trace ${runId}`, "UNKNOWN", req, `<section class="card"><p><a href="/viewer">← All traces</a></p><h1>${esc(trace.goal)}</h1><div class="grid"><div><strong>Workflow</strong><p>${esc(trace.workflow)}</p></div><div><strong>Mutation</strong><p>${esc(trace.mutation)}</p></div><div><strong>Customer</strong><p>${esc(trace.customer)}</p></div><div><strong>Resolution</strong><p>${trace.success ? "RESOLVED" : "FAILED"}</p></div><div><strong>Task completion</strong><p>${taskCompleted ? "COMPLETED" : trace.safeEscalation ? "NOT COMPLETED · SAFE ESCALATION" : "NOT COMPLETED"}</p></div><div><strong>Latency</strong><p>${trace.durationMs} ms</p></div><div><strong>Vision calls</strong><p>${trace.vlmCalls}</p></div></div></section>${timeline}`));
   } catch {
     return res.status(404).send("Trace not found");
   }

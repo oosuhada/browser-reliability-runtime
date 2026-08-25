@@ -36,8 +36,10 @@ async function main(): Promise<void> {
     const avgCalls = calls / traces.length;
     const failureCases = traces.filter((trace) => trace.steps.some((step) => step.phase === "FAILURE"));
     report[strategy] = {
-      workflowSuccessRate: traces.filter((trace) => trace.success).length / traces.length,
-      recoverySuccessRate: failureCases.length === 0 ? 1 : failureCases.filter((trace) => trace.success).length / failureCases.length,
+      workflowResolutionRate: traces.filter((trace) => trace.success).length / traces.length,
+      taskCompletionRate: traces.filter((trace) => trace.taskCompleted).length / traces.length,
+      safeEscalationRate: traces.filter((trace) => trace.safeEscalation).length / traces.length,
+      recoveryResolutionRate: failureCases.length === 0 ? 1 : failureCases.filter((trace) => trace.success).length / failureCases.length,
       averageVisionFallbackCalls: avgCalls,
       measuredBrowserRuntimeMs: Math.round(measuredLatency),
       estimatedVlmLatencyMs: Math.round(avgCalls * ESTIMATED_VLM_LATENCY_MS),

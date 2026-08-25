@@ -126,6 +126,7 @@ export interface WorkflowTrace {
   visionStrategy: VisionStrategy;
   reasoner: "heuristic" | "vlm";
   success: boolean;
+  taskCompleted: boolean;
   safeEscalation: boolean;
   visionFallbackCalls: number;
   vlmCalls: number;
