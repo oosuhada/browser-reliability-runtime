@@ -102,6 +102,14 @@ npm start
 
 The synthetic application listens on `http://127.0.0.1:4317` by default.
 
+To enable the strictly allowlisted one-click Playwright demo runner on the launcher:
+
+```bash
+DEMO_BROWSER_RUNS_ENABLED=true npm start
+```
+
+The public demo only accepts the repository's fixed synthetic workflows, customers, mutations, and local order. It does not accept arbitrary URLs or browser instructions, allows only one active run at a time, and applies a small in-memory run limit.
+
 In another shell:
 
 ```bash
@@ -255,6 +263,21 @@ Observed local behavior for `ORD-18401` (`$120`):
 
 This is the intended domain-context ablation: screen understanding alone is insufficient to choose the safe business action.
 
+Run the policy benchmark across both a `$120` and `$720` refund for both customers:
+
+```bash
+npm run benchmark:policy
+```
+
+Latest local result:
+
+| Input | Policy compliance | Unsafe autonomous executions |
+|---|---:|---:|
+| Screenshot + DOM + History | 25% | 3 / 4 |
+| Screenshot + DOM + History + Policy | 100% | 0 / 4 |
+
+The three unsafe no-policy cases are Customer A's `$720` refund and both Customer B refunds. This makes the domain-context effect measurable instead of demonstrating it with only one hand-picked example.
+
 ## Vision-on-demand experiment
 
 Command:
@@ -309,13 +332,16 @@ npm run dataset:export
 python3 training/prepare_sft.py
 ```
 
+`prepare_sft.py` deduplicates repeated deterministic traces and reserves whole mutation classes (`auth_expired`, `responsive_layout`, and `unexpected_navigation` by default) for evaluation. This avoids random train/eval leakage from repeated runs of the same synthetic mutation.
+
 On Colab/GPU:
 
 ```bash
 pip install -r training/requirements.txt
 python training/train_lora.py \
   --model=Qwen/Qwen2.5-1.5B-Instruct \
-  --data=training/data/sft.jsonl
+  --data=training/data/train.jsonl \
+  --eval-data=training/data/eval.jsonl
 ```
 
 The training path is implemented but **no GPU fine-tuning result is claimed in the current benchmark**. A base-vs-LoRA comparison should use a held-out mutation split and the same failure/recovery metrics.

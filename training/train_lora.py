@@ -14,7 +14,8 @@ from trl import SFTConfig, SFTTrainer
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct")
-    parser.add_argument("--data", default="training/data/sft.jsonl")
+    parser.add_argument("--data", default="training/data/train.jsonl")
+    parser.add_argument("--eval-data", default="training/data/eval.jsonl")
     parser.add_argument("--output", default="training/output/workflowlens-lora")
     parser.add_argument("--epochs", type=float, default=2.0)
     parser.add_argument("--batch-size", type=int, default=2)
@@ -43,8 +44,16 @@ def main() -> None:
         quantization_config=quantization_config,
     )
 
-    dataset = load_dataset("json", data_files=args.data, split="train")
-    split = dataset.train_test_split(test_size=max(1, int(len(dataset) * 0.15)), seed=42)
+    train_dataset = load_dataset("json", data_files=args.data, split="train")
+    eval_path = Path(args.eval_data)
+    if eval_path.exists():
+        eval_dataset = load_dataset("json", data_files=str(eval_path), split="train")
+        split_mode = "held_out_mutations"
+    else:
+        split = train_dataset.train_test_split(test_size=max(1, int(len(train_dataset) * 0.15)), seed=42)
+        train_dataset = split["train"]
+        eval_dataset = split["test"]
+        split_mode = "random_fallback"
 
     peft_config = LoraConfig(
         r=16,
@@ -77,8 +86,8 @@ def main() -> None:
     trainer = SFTTrainer(
         model=model,
         args=training_args,
-        train_dataset=split["train"],
-        eval_dataset=split["test"],
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         peft_config=peft_config,
         processing_class=tokenizer,
     )
@@ -91,8 +100,9 @@ def main() -> None:
         json.dumps(
             {
                 "base_model": args.model,
-                "train_samples": len(split["train"]),
-                "eval_samples": len(split["test"]),
+                "train_samples": len(train_dataset),
+                "eval_samples": len(eval_dataset),
+                "split_mode": split_mode,
                 "epochs": args.epochs,
                 "quantized": use_cuda,
             },
