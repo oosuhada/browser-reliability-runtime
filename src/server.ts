@@ -39,6 +39,43 @@ function routeParam(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
 }
 
+interface ViewerBBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface ViewerObservation {
+  workflowState: string;
+  url: string;
+  targetBBox: ViewerBBox | null;
+  blockerBBox: ViewerBBox | null;
+  scroll?: { x: number; y: number };
+  pageSize?: { width: number; height: number };
+}
+
+function bboxOverlay(
+  bbox: ViewerBBox | null,
+  observation: ViewerObservation,
+  kind: "target" | "blocker"
+): string {
+  if (!bbox || !observation.scroll || !observation.pageSize) return "";
+  if (observation.pageSize.width <= 0 || observation.pageSize.height <= 0) return "";
+
+  const left = ((bbox.x + observation.scroll.x) / observation.pageSize.width) * 100;
+  const top = ((bbox.y + observation.scroll.y) / observation.pageSize.height) * 100;
+  const width = (bbox.width / observation.pageSize.width) * 100;
+  const height = (bbox.height / observation.pageSize.height) * 100;
+  const border = kind === "target" ? "#12b76a" : "#f04438";
+  const background = kind === "target" ? "rgba(18,183,106,.08)" : "rgba(240,68,56,.08)";
+  const label = kind === "target" ? "TARGET" : "BLOCKER";
+
+  return `<div aria-label="${label} bounding box" style="position:absolute;left:${left.toFixed(4)}%;top:${top.toFixed(4)}%;width:${width.toFixed(4)}%;height:${height.toFixed(4)}%;border:3px solid ${border};background:${background};pointer-events:none;z-index:2;box-shadow:0 0 0 1px rgba(255,255,255,.9) inset">
+    <span style="position:absolute;left:-3px;top:-25px;background:${border};color:white;padding:3px 6px;border-radius:5px 5px 5px 0;font-size:10px;font-weight:800;letter-spacing:.06em">${label}</span>
+  </div>`;
+}
+
 function pageMeta(state: WorkflowState, req: Request, targetIds: string[]): string {
   const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
   const policy = getPolicy(typeof req.query.customer === "string" ? req.query.customer : undefined);
@@ -228,7 +265,7 @@ app.get("/viewer/:runId", async (req: Request, res: Response) => {
         index: number;
         phase: string;
         screenshot: string;
-        observation: { workflowState: string; url: string; targetBBox: unknown; blockerBBox: unknown };
+        observation: ViewerObservation;
         action: { name: string; success: boolean; error: string | null } | null;
         diagnosis: { failureType: string; confidence: number; reason: string; evidence: string[] } | null;
         rankedRecoveries: Array<{ action: string; score: number }>;
@@ -238,7 +275,12 @@ app.get("/viewer/:runId", async (req: Request, res: Response) => {
       }>;
     };
     const taskCompleted = trace.taskCompleted ?? (trace.success && !trace.safeEscalation);
-    const timeline = trace.steps.map((step) => `<section class="card"><div class="topbar"><div><strong>#${step.index} · ${esc(step.phase)}</strong><div>${esc(step.observation.workflowState)}</div></div><span class="pill">${esc(step.observation.url)}</span></div><div class="grid"><div><img src="/artifacts/traces/${encodeURIComponent(runId)}/${encodeURIComponent(step.screenshot)}" alt="Trace screenshot ${step.index}" style="width:100%;border:1px solid #e2e7f0;border-radius:12px" /></div><div>${step.action ? `<h3>Action</h3><p>${esc(step.action.name)} · ${step.action.success ? "success" : "failed"}</p>${step.action.error ? `<pre style="white-space:pre-wrap">${esc(step.action.error)}</pre>` : ""}` : ""}${step.diagnosis ? `<h3>Diagnosis</h3><p><strong>${esc(step.diagnosis.failureType)}</strong> · ${(step.diagnosis.confidence * 100).toFixed(0)}%</p><p>${esc(step.diagnosis.reason)}</p><ul>${step.diagnosis.evidence.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}${step.rankedRecoveries.length ? `<h3>Recovery ranking</h3><ol>${step.rankedRecoveries.map((item) => `<li>${esc(item.action)} · ${item.score.toFixed(2)}</li>`).join("")}</ol>` : ""}${step.policyDecision ? `<h3>Policy</h3><p>${esc(step.policyDecision.decision)} — ${esc(step.policyDecision.reason)}</p>` : ""}${step.executedRecovery ? `<h3>Executed</h3><p>${esc(step.executedRecovery)} · ${step.recoverySucceeded ? "success" : "failed"}</p>` : ""}</div></div></section>`).join("");
+    const timeline = trace.steps.map((step) => {
+      const targetOverlay = bboxOverlay(step.observation.targetBBox, step.observation, "target");
+      const blockerOverlay = bboxOverlay(step.observation.blockerBBox, step.observation, "blocker");
+      const hasVisualEvidence = Boolean(targetOverlay || blockerOverlay);
+      return `<section class="card"><div class="topbar"><div><strong>#${step.index} · ${esc(step.phase)}</strong><div>${esc(step.observation.workflowState)}</div></div><span class="pill">${esc(step.observation.url)}</span></div><div class="grid"><div>${hasVisualEvidence ? `<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;font-size:11px;font-weight:700"><span><span style="display:inline-block;width:9px;height:9px;border:2px solid #12b76a;margin-right:4px"></span>Target evidence</span><span><span style="display:inline-block;width:9px;height:9px;border:2px solid #f04438;margin-right:4px"></span>Blocker evidence</span></div>` : ""}<div style="position:relative;width:100%;line-height:0"><img src="/artifacts/traces/${encodeURIComponent(runId)}/${encodeURIComponent(step.screenshot)}" alt="Trace screenshot ${step.index}" style="display:block;width:100%;border:1px solid #e2e7f0;border-radius:12px" />${targetOverlay}${blockerOverlay}</div></div><div>${step.action ? `<h3>Action</h3><p>${esc(step.action.name)} · ${step.action.success ? "success" : "failed"}</p>${step.action.error ? `<pre style="white-space:pre-wrap">${esc(step.action.error)}</pre>` : ""}` : ""}${step.diagnosis ? `<h3>Diagnosis</h3><p><strong>${esc(step.diagnosis.failureType)}</strong> · ${(step.diagnosis.confidence * 100).toFixed(0)}%</p><p>${esc(step.diagnosis.reason)}</p><ul>${step.diagnosis.evidence.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}${step.rankedRecoveries.length ? `<h3>Recovery ranking</h3><ol>${step.rankedRecoveries.map((item) => `<li>${esc(item.action)} · ${item.score.toFixed(2)}</li>`).join("")}</ol>` : ""}${step.policyDecision ? `<h3>Policy</h3><p>${esc(step.policyDecision.decision)} — ${esc(step.policyDecision.reason)}</p>` : ""}${step.executedRecovery ? `<h3>Executed</h3><p>${esc(step.executedRecovery)} · ${step.recoverySucceeded ? "success" : "failed"}</p>` : ""}</div></div></section>`;
+    }).join("");
     return res.send(shell(`Trace ${runId}`, "UNKNOWN", req, `<section class="card"><p><a href="/viewer">← All traces</a></p><h1>${esc(trace.goal)}</h1><div class="grid"><div><strong>Workflow</strong><p>${esc(trace.workflow)}</p></div><div><strong>Mutation</strong><p>${esc(trace.mutation)}</p></div><div><strong>Customer</strong><p>${esc(trace.customer)}</p></div><div><strong>Resolution</strong><p>${trace.success ? "RESOLVED" : "FAILED"}</p></div><div><strong>Task completion</strong><p>${taskCompleted ? "COMPLETED" : trace.safeEscalation ? "NOT COMPLETED · SAFE ESCALATION" : "NOT COMPLETED"}</p></div><div><strong>Latency</strong><p>${trace.durationMs} ms</p></div><div><strong>Vision calls</strong><p>${trace.vlmCalls}</p></div></div></section>${timeline}`));
   } catch {
     return res.status(404).send("Trace not found");

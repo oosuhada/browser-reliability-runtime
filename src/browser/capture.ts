@@ -17,6 +17,24 @@ export async function getWorkflowState(page: Page): Promise<BrowserObservation["
 
 export async function captureObservation(page: Page, targetId: string | null): Promise<BrowserObservation> {
   const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+  const documentGeometry = await page.evaluate(() => ({
+    scroll: {
+      x: window.scrollX,
+      y: window.scrollY
+    },
+    pageSize: {
+      width: Math.max(
+        document.documentElement.scrollWidth,
+        document.body?.scrollWidth ?? 0,
+        window.innerWidth
+      ),
+      height: Math.max(
+        document.documentElement.scrollHeight,
+        document.body?.scrollHeight ?? 0,
+        window.innerHeight
+      )
+    }
+  }));
   const title = await page.title();
   const pageText = (await page.locator("body").innerText()).slice(0, 12000);
   let accessibility = "";
@@ -86,7 +104,9 @@ export async function captureObservation(page: Page, targetId: string | null): P
     targetInViewport,
     occlusionRatio: intersectionRatio(targetBBox, blockerBBox),
     overlayPresent: blockerCount > 0,
-    viewport
+    viewport,
+    scroll: documentGeometry.scroll,
+    pageSize: documentGeometry.pageSize
   };
 }
 

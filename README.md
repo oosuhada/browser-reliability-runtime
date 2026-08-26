@@ -23,6 +23,7 @@ The repository is fully synthetic and reproducible. It does not contain producti
 - JSONL failure dataset exporter.
 - Colab-oriented LoRA/SFT pipeline for failure diagnosis + recovery selection.
 - Human-readable trace viewer.
+- Screenshot evidence overlays for target and blocker bounding boxes on newly collected traces.
 
 ## Architecture
 

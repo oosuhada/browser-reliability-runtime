@@ -44,6 +44,8 @@ export interface BrowserObservation {
   occlusionRatio: number;
   overlayPresent: boolean;
   viewport: { width: number; height: number };
+  scroll: { x: number; y: number };
+  pageSize: { width: number; height: number };
 }
 
 export interface ActionRecord {
