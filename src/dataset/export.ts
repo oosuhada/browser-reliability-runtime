@@ -11,6 +11,7 @@ interface DatasetSample {
   order_id: string;
   previous_state: string | null;
   previous_action: string | null;
+  expected_next_state: string | null;
   current_state: string;
   screenshot: string;
   dom_snapshot: unknown;
@@ -42,6 +43,9 @@ async function main(): Promise<void> {
     }
     for (const step of trace.steps.filter((entry) => entry.phase === "FAILURE" && entry.groundTruth)) {
       const previous = step.actionHistory.at(-1) ?? null;
+      if (!previous?.expectedState) {
+        continue;
+      }
       samples.push({
         sample_id: `${trace.runId}_${step.index}`,
         goal: trace.goal,
@@ -50,6 +54,7 @@ async function main(): Promise<void> {
         order_id: trace.orderId,
         previous_state: previous?.stateBefore ?? null,
         previous_action: previous?.name ?? null,
+        expected_next_state: previous?.expectedState ?? null,
         current_state: step.observation.workflowState,
         screenshot: path.posix.join("artifacts", "traces", trace.runId, step.screenshot),
         dom_snapshot: step.observation.interactiveElements,

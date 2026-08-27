@@ -133,6 +133,8 @@ http://127.0.0.1:4317/viewer
 
 Every run stores a directory under `artifacts/traces/<run-id>/` containing screenshots and `trace.json`.
 
+Each action record also persists its `expectedState`, so a failure trace keeps the temporal contract explicitly: previous state + action + expected next state + observed current state.
+
 A failure trace includes:
 
 ```json
@@ -189,6 +191,18 @@ artifacts/datasets/workflowlens_failures.jsonl
 ```
 
 Each row contains the workflow goal, previous state/action, current state, interactive DOM representation, accessibility text, action history, customer policy, screenshot path, target/blocker bounding boxes, mutation ground truth, diagnosis, recovery ranking, and recovery result.
+
+The exported rows also include `expected_next_state`, which is used by the SFT prompt as explicit temporal workflow context.
+
+### Workflow transition benchmark
+
+```bash
+npm run benchmark:transitions
+```
+
+This benchmark separates the workflow's expected transition contract from the observed browser state and reports immediate transition success rate plus how consistently injected failure steps produce an expected-state mismatch before recovery.
+
+Latest 16-class failure run: all `16 / 16` failure steps had an explicit expected-state mismatch before recovery (`failureTransitionMismatchRecall = 100%`). The immediate transition success rate was `54.3%` because the metric intentionally includes both mutation-broken first attempts and successful post-recovery retries; it is a workflow transition metric, not a learned state-estimator accuracy claim.
 
 ### Visual grounding dataset
 
