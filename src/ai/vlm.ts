@@ -22,6 +22,29 @@ export interface VlmStructuredResult {
   reason: string;
 }
 
+function parseStructuredResult(content: string): VlmStructuredResult {
+  const trimmed = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    throw new Error(`VLM response did not contain a JSON object: ${content.slice(0, 500)}`);
+  }
+  const parsed = JSON.parse(trimmed.slice(start, end + 1)) as Partial<VlmStructuredResult>;
+  return {
+    workflow_state: String(parsed.workflow_state ?? "UNKNOWN"),
+    expected_next_state: String(parsed.expected_next_state ?? "UNKNOWN"),
+    failure_type: String(parsed.failure_type ?? "UNKNOWN_STATE").trim().toUpperCase(),
+    confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
+    target: parsed.target === null || parsed.target === undefined ? null : String(parsed.target),
+    blocker: parsed.blocker === null || parsed.blocker === undefined ? null : String(parsed.blocker),
+    evidence: Array.isArray(parsed.evidence) ? parsed.evidence.map(String) : [],
+    candidate_recovery: Array.isArray(parsed.candidate_recovery)
+      ? parsed.candidate_recovery.map((value) => String(value).trim().toUpperCase()).filter(Boolean)
+      : [],
+    reason: String(parsed.reason ?? "Live VLM diagnosis")
+  };
+}
+
 function endpoint(): string {
   return (process.env.VLM_ENDPOINT ?? "http://127.0.0.1:11434/v1").replace(/\/$/, "");
 }
@@ -51,7 +74,6 @@ export async function diagnoseWithVlm(request: VlmDiagnosisRequest): Promise<Vlm
     body: JSON.stringify({
       model,
       temperature: 0,
-      response_format: { type: "json_object" },
       messages: [
         {
           role: "user",
@@ -67,6 +89,6 @@ export async function diagnoseWithVlm(request: VlmDiagnosisRequest): Promise<Vlm
   const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = payload.choices?.[0]?.message?.content;
   if (!content) throw new Error("VLM response did not include message content.");
-  return JSON.parse(content) as VlmStructuredResult;
+  return parseStructuredResult(content);
 }
 

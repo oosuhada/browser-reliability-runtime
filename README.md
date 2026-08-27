@@ -407,7 +407,39 @@ Evaluate completed jobs with:
 npm run llm:queue:evaluate -- --batch=heldout_vision
 ```
 
-The enqueue command deduplicates repeated trace runs by mutation/order/transition signature before creating jobs. Evaluation writes a JSON report under `artifacts/reports/` so a local-model baseline can be compared directly with later VLM or fine-tuned runs.
+The model response includes both a Top-1 `recovery` and an ordered three-action `recovery_ranking`. Evaluation reports both Recovery Top-1 and Top-3 accuracy. The enqueue command deduplicates repeated trace runs by mutation/order/transition signature before creating jobs. Evaluation writes a JSON report under `artifacts/reports/` so a local-model baseline can be compared directly with later VLM or fine-tuned runs.
+
+Latest measured MacBook Pro text-only held-out result with `qwen_qwen3-coder-next` on the 9 held-out cases:
+
+| Metric | Measured result |
+|---|---:|
+| Failure accuracy | 66.7% |
+| Failure Macro-F1 | 50.0% |
+| Recovery Top-1 | 33.3% |
+| Recovery Top-3 | 66.7% |
+| Average request latency | 31,259 ms |
+
+The ranked run shared LM Studio with another local workload, so the latency is a real observed queue/runtime value rather than a clean isolated model-speed benchmark. The error pattern is informative: all three `AUTH_EXPIRED` cases were classified as `UNEXPECTED_MODAL`, but `REAUTHENTICATE` still appeared at rank 2 in all three recovery lists. All three `RESPONSIVE_LAYOUT_CHANGE` diagnoses were correct, while the expected `CHANGE_VIEWPORT` recovery was absent from their Top-3 lists. `NAVIGATION_ERROR` was 3/3 correct for both diagnosis and Top-1 recovery.
+
+Compare completed model benchmark reports that use the same held-out split:
+
+```bash
+npm run benchmark:models -- --inputs=artifacts/reports/text.json,artifacts/reports/vision.json,artifacts/reports/lora.json
+```
+
+The comparison command produces JSON and Markdown tables with failure accuracy, Macro-F1, Recovery Top-1/Top-3, and average latency. Missing metrics stay `n/a`; the command does not invent placeholder performance values.
+
+### Cross-workflow generalization
+
+The synthetic application also includes a third workflow family, `approve_refund`, with separate `APPROVAL_QUEUE` and `APPROVAL_DETAIL` states. It deliberately reuses existing failure classes such as unexpected modal, expired authentication, permission denial, confirmation, and stale state rather than creating a new taxonomy for the new page family.
+
+```bash
+npm run benchmark:generalization
+```
+
+This benchmark is kept separate from the SFT generation cases, so the report explicitly tests the reliability logic on an approval workflow that is not part of the current 43-condition training dataset.
+
+Latest measured deterministic generalization result: `5 / 5` approval failures were diagnosed correctly, Recovery Top-1/Top-3 were both `100%`, expected recovery execution succeeded in `5 / 5`, workflow resolution was `100%`, and task completion was `80%` because the permission-denied case intentionally ended in a safe human escalation.
 
 ## LoRA / SFT experiment
 
@@ -431,6 +463,37 @@ python training/train_lora.py \
   --data=training/data/train.jsonl \
   --eval-data=training/data/eval.jsonl
 ```
+
+`prepare_sft.py` writes the inference prompt and expected labels into separate fields in addition to the training `text`. This prevents the evaluation script from accidentally feeding the assistant ground-truth answer back into the model.
+
+Run the same held-out prompt set against the base model and the LoRA adapter:
+
+```bash
+python training/run_inference.py \
+  --model=Qwen/Qwen2.5-1.5B-Instruct \
+  --data=training/data/eval.jsonl \
+  --output=training/output/base_predictions.jsonl \
+  --load-in-4bit
+
+python training/run_inference.py \
+  --model=Qwen/Qwen2.5-1.5B-Instruct \
+  --adapter=training/output/workflowlens-lora \
+  --data=training/data/eval.jsonl \
+  --output=training/output/lora_predictions.jsonl \
+  --load-in-4bit
+
+python training/evaluate_predictions.py \
+  --predictions=training/output/base_predictions.jsonl \
+  --output=artifacts/reports/workflowlens_base.json \
+  --model=Qwen/Qwen2.5-1.5B-Instruct
+
+python training/evaluate_predictions.py \
+  --predictions=training/output/lora_predictions.jsonl \
+  --output=artifacts/reports/workflowlens_lora.json \
+  --model=workflowlens-lora
+```
+
+Those reports use `workflowlens.model-benchmark.v1`, so they can be passed directly to `npm run benchmark:models` together with local text/VLM reports.
 
 The training path is implemented but **no GPU fine-tuning result is claimed in the current benchmark**. A base-vs-LoRA comparison should use a held-out mutation split and the same failure/recovery metrics.
 

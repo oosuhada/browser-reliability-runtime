@@ -164,7 +164,7 @@ app.post("/api/demo/run", async (req: Request, res: Response) => {
   const workflow = String(req.body?.workflow ?? "");
   const customer = String(req.body?.customer ?? "");
   const mutation = String(req.body?.mutation ?? "");
-  const allowedWorkflows = new Set(["refund_order", "lookup_shipment"]);
+  const allowedWorkflows = new Set(["refund_order", "lookup_shipment", "approve_refund"]);
   const allowedCustomers = new Set(["customer_a", "customer_b"]);
   const allowedMutations = new Set(Object.keys(MUTATIONS));
 
@@ -183,7 +183,7 @@ app.post("/api/demo/run", async (req: Request, res: Response) => {
   try {
     const { runWorkflow } = await import("./browser/runner.js");
     const trace = await runWorkflow({
-      workflow: workflow as "refund_order" | "lookup_shipment",
+      workflow: workflow as "refund_order" | "lookup_shipment" | "approve_refund",
       customer: customer as "customer_a" | "customer_b",
       mutation: mutation as keyof typeof MUTATIONS,
       orderId: "ORD-18401",
@@ -287,6 +287,7 @@ app.get("/", (req: Request, res: Response) => {
       <div class="actions">
         <button id="run-refund" class="btn" onclick="runControlledDemo('refund_order')">Run refund reliability demo</button>
         <button id="run-shipment" class="btn secondary" onclick="runControlledDemo('lookup_shipment')">Run shipment reliability demo</button>
+        <button id="run-approval" class="btn secondary" onclick="runControlledDemo('approve_refund')">Run approval reliability demo</button>
         <button class="btn secondary" onclick="launch('refund_order')">Open synthetic app manually</button>
         <a class="btn secondary" href="/viewer">Open trace viewer</a>
       </div>
@@ -297,6 +298,10 @@ app.get("/", (req: Request, res: Response) => {
       function launch(workflow) {
         const customer = document.getElementById('customer').value;
         const mutation = document.getElementById('mutation').value;
+        if (workflow === 'approve_refund') {
+          window.location.href = '/approvals?customer=' + encodeURIComponent(customer) + '&mutation=' + encodeURIComponent(mutation) + '&debug=1';
+          return;
+        }
         window.location.href = '/login?customer=' + encodeURIComponent(customer) + '&mutation=' + encodeURIComponent(mutation) + '&workflow=' + encodeURIComponent(workflow) + '&debug=1';
       }
 
@@ -304,7 +309,7 @@ app.get("/", (req: Request, res: Response) => {
         const customer = document.getElementById('customer').value;
         const mutation = document.getElementById('mutation').value;
         const status = document.getElementById('run-status');
-        const buttons = [document.getElementById('run-refund'), document.getElementById('run-shipment')];
+        const buttons = [document.getElementById('run-refund'), document.getElementById('run-shipment'), document.getElementById('run-approval')];
         status.style.display = 'block';
         status.classList.remove('success');
         status.textContent = 'Running controlled local-browser workflow…';
@@ -460,6 +465,61 @@ app.get("/orders/:orderId/refund", (req: Request, res: Response) => {
       }
     </script>
   `, ["execute_refund_button"]));
+});
+
+app.get("/approvals", (req: Request, res: Response) => {
+  const suffix = querySuffix(req);
+  const rows = ORDERS.map((order) => `<tr><td><a data-target-id="approval_${order.id}" href="/approvals/${order.id}${suffix}">${order.id}</a></td><td>${esc(order.customer)}</td><td>$${order.total.toFixed(2)}</td><td>Pending review</td></tr>`).join("");
+  res.send(shell("Approval queue", "APPROVAL_QUEUE", req, `
+    <section class="card">
+      <h1>Refund approval queue</h1>
+      <p>This queue represents a separate operations workflow: a human reviewer decides whether an already-escalated refund request can proceed.</p>
+      <div style="overflow:auto"><table><thead><tr><th>Order</th><th>Customer</th><th>Amount</th><th>Approval state</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </section>
+  `, ORDERS.map((order) => `approval_${order.id}`)));
+});
+
+app.get("/approvals/:orderId", (req: Request, res: Response) => {
+  const order = getOrder(routeParam(req.params.orderId));
+  const suffix = querySuffix(req);
+  const mutation = getMutation(typeof req.query.mutation === "string" ? req.query.mutation : undefined);
+  const applied = mutationApplies(mutation, "APPROVAL_DETAIL");
+  const permissionDenied = applied && mutation.id === "permission_denied";
+  const stale = applied && mutation.id === "stale_state";
+  const actionUrl = `/approvals/${order.id}/complete${suffix}`;
+  const clickScript = applied && mutation.id === "confirmation_required"
+    ? `document.getElementById('approval-confirmation-modal').style.display = 'grid';`
+    : `window.location.href = '${actionUrl}';`;
+  const blocker = applied && mutation.id === "unexpected_modal"
+    ? overlay("announcement_modal", "Approval queue announcement", "A policy bulletin is covering the approval controls.")
+    : applied && mutation.id === "auth_expired"
+      ? `<div class="overlay" data-testid="session_expired_modal" data-blocker-id="session_expired_modal"><section class="modal" role="dialog" aria-modal="true"><h2>Session expired</h2><p>Your reviewer session expired before approval.</p><a class="btn" data-recovery-action="REAUTHENTICATE" href="/login${suffix}">Sign in again</a></section></div>`
+      : "";
+  res.send(shell(`Approval review ${order.id}`, "APPROVAL_DETAIL", req, `
+    <section class="card">
+      <p><a href="/approvals${suffix}">← Approval queue</a></p>
+      <h1>Review ${order.id}</h1>
+      <div class="grid"><div><strong>Customer</strong><p>${esc(order.customer)}</p></div><div><strong>Refund amount</strong><p>$${order.total.toFixed(2)}</p></div><div><strong>Order status</strong><p>${order.status}</p></div><div><strong>Review state</strong><p>Pending approval</p></div></div>
+      ${permissionDenied ? `<div class="notice" data-testid="permission_banner" data-blocker-id="permission_banner">Permission denied: your role cannot approve refund requests.</div>` : ""}
+      ${stale ? `<div class="notice" data-testid="stale_state_banner" data-blocker-id="stale_state_banner">Order data changed after page load. Refresh before proceeding.</div>` : ""}
+      <div class="actions"><button class="btn danger" data-target-id="approve_refund_button" ${permissionDenied || stale ? "disabled" : ""} onclick="handleApproval()">Approve refund</button></div>
+    </section>
+    <div id="approval-confirmation-modal" class="overlay" data-testid="confirmation_modal" data-blocker-id="confirmation_modal" style="display:none"><section class="modal"><h2>Confirm approval</h2><p>Confirm approval of the refund request for ${order.id}.</p><button class="btn danger" data-recovery-action="CONFIRM" onclick="window.location.href='${actionUrl}'">Confirm approval</button></section></div>
+    ${blocker}
+    <script>
+      function handleApproval() {
+        ${clickScript}
+      }
+    </script>
+  `, ["approve_refund_button"]));
+});
+
+app.get("/approvals/:orderId/complete", (req: Request, res: Response) => {
+  const order = getOrder(routeParam(req.params.orderId));
+  const suffix = querySuffix(req);
+  res.send(shell(`Approval complete ${order.id}`, "COMPLETE", req, `
+    <section class="card"><h1>Refund approved</h1><div class="notice success">${order.id} was approved in the synthetic reviewer workflow.</div><div class="actions"><a class="btn secondary" href="/approvals${suffix}">Back to approval queue</a></div></section>
+  `));
 });
 
 app.get("/orders/:orderId/approval", (req: Request, res: Response) => {

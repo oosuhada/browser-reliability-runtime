@@ -20,6 +20,8 @@
     "benchmark:runtime": "tsx src/evaluation/runtime.ts",
     "benchmark:policy": "tsx src/evaluation/policy.ts",
     "benchmark:transitions": "tsx src/evaluation/transitions.ts",
+    "benchmark:models": "tsx src/evaluation/model-comparison.ts",
+    "benchmark:generalization": "tsx src/evaluation/generalization.ts",
     "llm:queue:enqueue": "tsx src/local-llm/enqueue.ts",
     "llm:queue:work": "tsx src/local-llm/worker.ts",
     "llm:queue:status": "tsx src/local-llm/status.ts",
