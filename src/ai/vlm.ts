@@ -55,7 +55,7 @@ export async function diagnoseWithVlm(request: VlmDiagnosisRequest): Promise<Vlm
   const bytes = await readFile(request.screenshotPath);
   const imageUrl = `data:image/png;base64,${bytes.toString("base64")}`;
   const prompt = [
-    "You are WorkflowLens, a browser automation reliability layer. Do not plan a general web task.",
+    "You are Browser Reliability Runtime, a browser automation reliability layer. Do not plan a general web task.",
     "Diagnose why the existing workflow automation failed and rank safe recovery actions.",
     `GOAL: ${request.goal}`,
     `PREVIOUS ACTION: ${request.previousAction ?? "none"}`,

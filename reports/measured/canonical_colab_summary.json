@@ -1,0 +1,65 @@
+{
+  "project": "browser-reliability-runtime",
+  "experiment": "canonical_colab_base_vs_qlora",
+  "canonical": true,
+  "timestamp_utc": "2026-08-25T06:53:48.841410+00:00",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "train_samples": 34,
+  "eval_samples": 9,
+  "held_out_mutations": [
+    "auth_expired",
+    "responsive_layout",
+    "unexpected_navigation"
+  ],
+  "leakage_checks": {
+    "mutation_overlap": 0,
+    "sample_id_overlap": 0,
+    "eval_prompt_leaks": 0,
+    "held_out_samples_used_for_training": 0,
+    "assistant_only_loss": true
+  },
+  "base": {
+    "failure_accuracy": 0.0,
+    "failure_macro_f1": 0.0,
+    "recovery_top1": 0.3333333333333333,
+    "recovery_top3": 0.3333333333333333,
+    "average_latency_ms": 3991
+  },
+  "lora": {
+    "failure_accuracy": 0.0,
+    "failure_macro_f1": 0.0,
+    "recovery_top1": 0.0,
+    "recovery_top3": 0.6666666666666666,
+    "average_latency_ms": 6513
+  },
+  "delta_percentage_points": {
+    "failure_accuracy": 0.0,
+    "failure_macro_f1": 0.0,
+    "recovery_top1": -33.33333333333333,
+    "recovery_top3": 33.33333333333333
+  },
+  "sample_level_failure_transitions": {
+    "base_wrong_lora_correct": 0,
+    "base_correct_lora_wrong": 0,
+    "both_correct": 0,
+    "both_wrong": 9
+  },
+  "training": {
+    "quantization": "4-bit NF4 double-quant",
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "epochs": 2.0,
+    "learning_rate": 0.0002,
+    "effective_batch_size": 16,
+    "seed": 42,
+    "trainable_parameters": 18464768,
+    "trainer_runtime_seconds": 18.1636,
+    "train_loss": 0.7402832706769308
+  },
+  "artifact": {
+    "zip_bytes": 72053020,
+    "zip_sha256": "370c894f085387bdfd626a2db4e5cf05a01e8e909b89452251e350582b7d5f99"
+  }
+}

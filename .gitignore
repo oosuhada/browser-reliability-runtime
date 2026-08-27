@@ -17,6 +17,6 @@ test-results/
 __pycache__/
 *.pyc
 .venv/
-training/data/*.jsonl
+training/data/
 training/output/
 

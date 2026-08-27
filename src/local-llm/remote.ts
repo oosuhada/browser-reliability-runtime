@@ -13,7 +13,7 @@ interface RemoteModelsResponse {
 }
 
 interface ChatCompletionResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{ message?: { content?: string | null; reasoning_content?: string | null } }>;
 }
 
 function sshHost(): string {
@@ -134,7 +134,7 @@ export async function resolveLoadedModel(requiresVision: boolean, requestedModel
 
 function prompt(evidence: LocalLlmEvidence): string {
   return [
-    "You are WorkflowLens, a browser workflow reliability layer.",
+    "You are Browser Reliability Runtime, a browser workflow reliability layer.",
     "Diagnose why an existing browser automation step failed. Do not plan a general browsing task.",
     "Use only the evidence below. Return JSON only.",
     "Required keys: failure_type, recovery, recovery_ranking, confidence, reason.",
@@ -191,17 +191,18 @@ export async function runRemoteDiagnosis(
   const response = JSON.parse(await sshCurl(`${endpoint()}/v1/chat/completions`, {
     model: model.id,
     temperature: 0,
-    max_tokens: 512,
+    max_tokens: requiresVision ? 1536 : 512,
     messages: [
       {
         role: "system",
-        content: "You diagnose browser workflow failures and emit strict JSON. Never reveal hidden benchmark labels because none are provided."
+        content: "You diagnose browser workflow failures and emit strict JSON. Return the final JSON immediately and keep internal reasoning brief. Never reveal hidden benchmark labels because none are provided."
       },
       { role: "user", content }
     ]
   })) as ChatCompletionResponse;
-  const rawContent = response.choices?.[0]?.message?.content;
-  if (!rawContent) throw new Error("Remote LM Studio response did not include message content.");
+  const message = response.choices?.[0]?.message;
+  const rawContent = message?.content?.trim() || message?.reasoning_content?.trim();
+  if (!rawContent) throw new Error("Remote LM Studio response did not include message content or usable reasoning content.");
   return {
     prediction: extractJson(rawContent),
     rawContent,

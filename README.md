@@ -1,12 +1,36 @@
-# WorkflowLens
+# Browser Reliability Runtime
 
-WorkflowLens is a **multimodal workflow reliability layer** for browser automation. It is not a general-purpose browser agent. The system assumes an existing Playwright/RPA workflow and focuses on one question:
+**Multimodal failure diagnosis, policy-aware recovery, and verification for browser automation.**
 
-Live synthetic demo: **https://workflowlens.oosu.dev**
+[Live Demo](https://workflowlens.oosu.dev) · [Measured Results](reports/measured/README.md) · [Failure Benchmark](#current-deterministic-benchmark) · [Local Model Benchmark](#macbook-pro-local-llm-waiting-queue)
+
+Browser Reliability Runtime is not a general-purpose browser agent. It assumes an existing Playwright/RPA workflow and focuses on one question:
 
 > When the workflow fails, can we understand why it failed, choose a policy-safe recovery, execute it, and verify that the workflow returned to a valid state?
 
 The repository is fully synthetic and reproducible. It does not contain production browser sessions, private company screenshots, credentials, or proprietary workflow data.
+
+## Measured highlights
+
+The project has three different kinds of measured evidence: deterministic end-to-end recovery coverage across the full synthetic taxonomy, a text-only vs screenshot-aware local-model comparison, and a leakage-free Base vs QLoRA held-out experiment.
+
+| Result | Measured outcome |
+|---|---:|
+| Deterministic 16-class workflow resolution | **100%** |
+| Deterministic task completion | **87.5%** |
+| Policy compliance with customer policy context | **100%** |
+| Policy compliance without policy context | **25%** |
+| Text-only local LLM failure accuracy, 9 held-out cases | **66.7%** |
+| Screenshot + structured-context VLM failure accuracy, same 9 cases | **100%** |
+| Text-only Recovery Top-3 | **66.7%** |
+| Screenshot + structured-context VLM Recovery Top-3 | **100%** |
+| Qwen2.5-1.5B Base failure accuracy, 9 leakage-free held-out cases | **0.0%** |
+| 34-sample QLoRA failure accuracy, same 9 cases | **0.0%** |
+| Qwen2.5-1.5B Base → QLoRA Recovery Top-3 | **33.3% → 66.7%** |
+
+The learned-model result is the central multimodal finding: on the same held-out `AUTH_EXPIRED`, `RESPONSIVE_LAYOUT_CHANGE`, and `NAVIGATION_ERROR` cases, adding the screenshot to temporal and structured workflow evidence raised failure accuracy from **66.7% to 100%**. This is a deliberately small nine-case experiment, so it demonstrates the value of visual evidence inside this controlled reliability task rather than broad web generalization.
+
+The fine-tuning result is intentionally reported even though it is negative. A 34-sample QLoRA adapter did **not** improve held-out failure classification: Base and LoRA both scored `0/9`. Recovery Top-3 improved from **33.3% to 66.7%**, but Recovery Top-1 fell from **33.3% to 0%** and average latency increased. No seed, split, or epoch retuning was performed after observing the first successful canonical run.
 
 ## What is implemented
 
@@ -21,7 +45,7 @@ The repository is fully synthetic and reproducible. It does not contain producti
 - Vision-on-demand runtime comparison.
 - OpenAI-compatible live VLM fallback adapter.
 - JSONL failure dataset exporter.
-- Colab-oriented LoRA/SFT pipeline for failure diagnosis + recovery selection.
+- Canonical Colab/A100 QLoRA runner for leakage-free Base vs fine-tuned evaluation.
 - Human-readable trace viewer.
 - Screenshot evidence overlays for target and blocker bounding boxes on newly collected traces.
 
@@ -65,7 +89,7 @@ Login → Orders → Order Detail → Refund → Execute / Human Approval → Te
 Login → Orders → Order Detail → Shipment Lookup → Shipment State
 ```
 
-The normal browser automation deliberately uses brittle human-facing selectors first. WorkflowLens only enters the recovery path when the action fails, the transition is wrong, or a low-confidence geometry condition is detected.
+The normal browser automation deliberately uses brittle human-facing selectors first. Browser Reliability Runtime only enters the recovery path when the action fails, the transition is wrong, or a low-confidence geometry condition is detected.
 
 ## Failure mutation taxonomy
 
@@ -263,7 +287,7 @@ Latest local run over all 16 mutation categories:
 | Failure Macro-F1 | 100% |
 | Recovery Top-1 | 100% |
 | Expected recovery success | 100% |
-| Avg. browser runtime | 1328 ms |
+| Avg. browser runtime | 1030 ms |
 | Avg. vision fallback opportunities | 1.0 |
 | Actual live VLM calls | 0 |
 
@@ -292,7 +316,7 @@ The most illustrative temporal case is `unexpected_navigation`: the current page
 
 ## Customer-specific policy experiment
 
-The refund page intentionally does **not** render the customer SOP. The visible `$120` refund screen is the same business action for both tenants; policy is external context supplied to WorkflowLens.
+The refund page intentionally does **not** render the customer SOP. The visible `$120` refund screen is the same business action for both tenants; policy is external context supplied to Browser Reliability Runtime.
 
 Policy definitions:
 
@@ -369,7 +393,7 @@ If the VLM request fails, the trace records the error evidence and falls back to
 
 ## MacBook Pro local-LLM waiting queue
 
-WorkflowLens can use the Tailscale-reachable MacBook Pro as a serialized inference worker without exposing LM Studio outside that machine. Queue files live under `artifacts/local-llm-queue/` on the MacBook Air and move through `pending`, `running`, `blocked`, `completed`, and `failed` directories. Requests are sent to `127.0.0.1:1234` on the MacBook Pro through SSH stdin, so screenshots and prompts do not need a public API endpoint.
+Browser Reliability Runtime can use the Tailscale-reachable MacBook Pro as a serialized inference worker without exposing LM Studio outside that machine. Queue files live under `artifacts/local-llm-queue/` on the MacBook Air and move through `pending`, `running`, `blocked`, `completed`, and `failed` directories. Requests are sent to `127.0.0.1:1234` on the MacBook Pro through SSH stdin, so screenshots and prompts do not need a public API endpoint.
 
 Enqueue held-out temporal failure cases for the model that is currently loaded in LM Studio:
 
@@ -393,7 +417,7 @@ node dist/local-llm/worker.js --watch
 
 The repository also includes `deploy/dev.oosu.workflowlens-llm-worker.plist` for a MacBook Air `launchd` worker. The worker never loads or unloads LM Studio models. A text job uses an already loaded LLM/VLM. A vision job is moved to `blocked` when no VLM is loaded and is retried automatically by the watch worker after a compatible VLM becomes available.
 
-The worker also respects existing LM Studio traffic by default. Before claiming a queued job it checks whether the LM Studio port already has an established inference connection. If another local agent is generating, WorkflowLens leaves its job untouched and retries on a later poll instead of competing for the same model. Set `WORKFLOWLENS_LLM_RESPECT_REMOTE_BUSY=false` only when concurrent inference is intentional.
+The worker also respects existing LM Studio traffic by default. Before claiming a queued job it checks whether the LM Studio port already has an established inference connection. If another local agent is generating, Browser Reliability Runtime leaves its job untouched and retries on a later poll instead of competing for the same model. Set `WORKFLOWLENS_LLM_RESPECT_REMOTE_BUSY=false` only when concurrent inference is intentional.
 
 Enqueue screenshot-aware jobs after loading a VLM in LM Studio:
 
@@ -409,17 +433,18 @@ npm run llm:queue:evaluate -- --batch=heldout_vision
 
 The model response includes both a Top-1 `recovery` and an ordered three-action `recovery_ranking`. Evaluation reports both Recovery Top-1 and Top-3 accuracy. The enqueue command deduplicates repeated trace runs by mutation/order/transition signature before creating jobs. Evaluation writes a JSON report under `artifacts/reports/` so a local-model baseline can be compared directly with later VLM or fine-tuned runs.
 
-Latest measured MacBook Pro text-only held-out result with `qwen_qwen3-coder-next` on the 9 held-out cases:
+The same 9-case held-out mutation split was measured with a text-only local LLM and a screenshot-aware local VLM:
 
-| Metric | Measured result |
-|---|---:|
-| Failure accuracy | 66.7% |
-| Failure Macro-F1 | 50.0% |
-| Recovery Top-1 | 33.3% |
-| Recovery Top-3 | 66.7% |
-| Average request latency | 31,259 ms |
+| Model | Modality | Failure accuracy | Macro-F1 | Recovery Top-1 | Recovery Top-3 | Avg latency |
+|---|---|---:|---:|---:|---:|---:|
+| Qwen3-Coder-Next | structured text | 66.7% | 50.0% | 33.3% | 66.7% | 31.26 s |
+| **Gemma 4 26B-A4B** | **screenshot + structured context** | **100%** | **100%** | **66.7%** | **100%** | 34.21 s |
 
-The ranked run shared LM Studio with another local workload, so the latency is a real observed queue/runtime value rather than a clean isolated model-speed benchmark. The error pattern is informative: all three `AUTH_EXPIRED` cases were classified as `UNEXPECTED_MODAL`, but `REAUTHENTICATE` still appeared at rank 2 in all three recovery lists. All three `RESPONSIVE_LAYOUT_CHANGE` diagnoses were correct, while the expected `CHANGE_VIEWPORT` recovery was absent from their Top-3 lists. `NAVIGATION_ERROR` was 3/3 correct for both diagnosis and Top-1 recovery.
+This is the key measured multimodal result: adding actual screenshot evidence to the same workflow evidence improved failure diagnosis from **66.7% to 100%**, Recovery Top-1 from **33.3% to 66.7%**, and Recovery Top-3 from **66.7% to 100%**. The Gemma run used `google/gemma-4-26b-a4b` through LM Studio with a 1536-token vision completion budget and completed all 9 held-out requests without blocked or failed jobs.
+
+The class-level pattern is also informative. Gemma diagnosed and recovered all three `AUTH_EXPIRED` cases correctly, diagnosed all three `NAVIGATION_ERROR` cases and selected `RETURN_PREVIOUS_STEP` correctly, and diagnosed all three `RESPONSIVE_LAYOUT_CHANGE` cases correctly. Responsive-layout Recovery Top-1 still preferred `RETRY`, but the expected `CHANGE_VIEWPORT` action appeared inside the Top-3 for every case. The text-only run instead classified all three `AUTH_EXPIRED` cases as `UNEXPECTED_MODAL`; `NAVIGATION_ERROR` was its strongest class at 3/3 diagnosis and Top-1 recovery.
+
+The latency values are real observed local queue/runtime measurements, not isolated model-throughput benchmarks. The text run shared LM Studio with another local workload, while the VLM run reflects the loaded Gemma 4 inference path.
 
 Compare completed model benchmark reports that use the same held-out split:
 
@@ -443,7 +468,22 @@ Latest measured deterministic generalization result: `5 / 5` approval failures w
 
 ## LoRA / SFT experiment
 
-The first fine-tuning target is intentionally narrow: **failure diagnosis + recovery selection**, not the entire browser agent.
+The fine-tuning target is intentionally narrow: **failure diagnosis + recovery selection**, not the entire browser agent.
+
+### Canonical Colab held-out experiment
+
+We evaluated `Qwen/Qwen2.5-1.5B-Instruct` and a 34-sample assistant-only QLoRA adapter on the same leakage-free 9-case held-out set. The set contains three cases each for `AUTH_EXPIRED`, `RESPONSIVE_LAYOUT_CHANGE`, and `NAVIGATION_ERROR`. These mutation classes were excluded entirely from training.
+
+| Model | N | Failure Accuracy | Failure Macro-F1 | Recovery Top-1 | Recovery Top-3 | Avg latency |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen2.5-1.5B Base | 9 | 0.00% | 0.00% | 33.33% | 33.33% | 3,991 ms |
+| Browser Reliability Runtime LoRA | 9 | 0.00% | 0.00% | 0.00% | 66.67% | 6,513 ms |
+
+The 34-sample LoRA adapter did not improve held-out failure classification. It improved Recovery Top-3 by **33.33 percentage points**, but Recovery Top-1 decreased by **33.33 points** and average latency increased by `2,522 ms`. At the sample level, all nine failure classifications were wrong for both Base and LoRA. The first successful run is the canonical result; no seed, split, or epoch retuning was performed after observing it.
+
+The class behavior explains the aggregate result. Both models labeled all three `AUTH_EXPIRED` cases as `SESSION_EXPIRED` and all three `RESPONSIVE_LAYOUT_CHANGE` cases as `LOADING_STUCK`. Base labeled all three `NAVIGATION_ERROR` cases as `UNKNOWN`; LoRA changed those to `UNEXPECTED_MODAL`. LoRA did, however, place `CHANGE_VIEWPORT` in the Top-3 for all three responsive-layout cases and preserved the expected navigation recovery inside the Top-3, which is why Recovery Top-3 increased despite zero classification accuracy.
+
+The canonical A100 run used 4-bit NF4 double quantization, LoRA rank `16`, alpha `32`, dropout `0.05`, two epochs, learning rate `2e-4`, effective batch size `16`, and seed `42`. Only assistant response tokens contributed to training loss. Training used exactly `34` examples; the `9` held-out examples contributed no training loss. The A100 trainer runtime was `18.16 s`, final train loss was `0.740283`, and the adapter contained `18,464,768` trainable parameters.
 
 Prepare data locally:
 
@@ -454,53 +494,20 @@ python3 training/prepare_sft.py
 
 `prepare_sft.py` deduplicates repeated deterministic traces and reserves whole mutation classes (`auth_expired`, `responsive_layout`, and `unexpected_navigation` by default) for evaluation. This avoids random train/eval leakage from repeated runs of the same synthetic mutation.
 
-On Colab/GPU:
+For the canonical Colab path, copy the repository with the generated `training/data/` split into the Colab workspace, install the training requirements, and run the single experiment driver:
 
 ```bash
 pip install -r training/requirements.txt
-python training/train_lora.py \
-  --model=Qwen/Qwen2.5-1.5B-Instruct \
-  --data=training/data/train.jsonl \
-  --eval-data=training/data/eval.jsonl
+python training/colab_final_experiment.py \
+  --workspace=/content/browser-reliability-runtime
 ```
 
-`prepare_sft.py` writes the inference prompt and expected labels into separate fields in addition to the training `text`. This prevents the evaluation script from accidentally feeding the assistant ground-truth answer back into the model.
-
-Run the same held-out prompt set against the base model and the LoRA adapter:
-
-```bash
-python training/run_inference.py \
-  --model=Qwen/Qwen2.5-1.5B-Instruct \
-  --data=training/data/eval.jsonl \
-  --output=training/output/base_predictions.jsonl \
-  --load-in-4bit
-
-python training/run_inference.py \
-  --model=Qwen/Qwen2.5-1.5B-Instruct \
-  --adapter=training/output/workflowlens-lora \
-  --data=training/data/eval.jsonl \
-  --output=training/output/lora_predictions.jsonl \
-  --load-in-4bit
-
-python training/evaluate_predictions.py \
-  --predictions=training/output/base_predictions.jsonl \
-  --output=artifacts/reports/workflowlens_base.json \
-  --model=Qwen/Qwen2.5-1.5B-Instruct
-
-python training/evaluate_predictions.py \
-  --predictions=training/output/lora_predictions.jsonl \
-  --output=artifacts/reports/workflowlens_lora.json \
-  --model=workflowlens-lora
-```
-
-Those reports use `workflowlens.model-benchmark.v1`, so they can be passed directly to `npm run benchmark:models` together with local text/VLM reports.
-
-The training path is implemented but **no GPU fine-tuning result is claimed in the current benchmark**. A base-vs-LoRA comparison should use a held-out mutation split and the same failure/recovery metrics.
+`colab_final_experiment.py` validates the `34/9` split, checks mutation/sample-ID overlap and prompt leakage, runs Base inference first, trains the QLoRA adapter, evaluates the same nine prompts with the adapter, produces Base/LoRA reports and a paired comparison, verifies adapter creation, and packages the run artifacts. The small checked-in summary under `reports/measured/` records the canonical metrics and provenance; the 72 MB adapter/result ZIP stays outside Git. The legacy `workflowlens.model-benchmark.v1` schema identifier is intentionally retained for compatibility with pre-rename benchmark artifacts.
 
 ## Repository structure
 
 ```text
-workflowlens/
+browser-reliability-runtime/
 ├── src/
 │   ├── ai/                 # diagnosis, recovery ranking, live VLM adapter
 │   ├── browser/            # Playwright capture + recovery runner
@@ -510,6 +517,7 @@ workflowlens/
 │   ├── mutations.ts        # deterministic failure taxonomy + ground truth
 │   └── server.ts           # synthetic commerce app + trace viewer
 ├── training/               # Colab-oriented SFT/LoRA path
+├── reports/measured/       # small checked-in measured-result summaries
 ├── dataset/samples/        # public synthetic schema examples
 ├── artifacts/              # ignored generated traces, screenshots, reports
 └── README.md
@@ -518,8 +526,8 @@ workflowlens/
 ## Known limitations / next experiments
 
 - The 100% full benchmark is expected on a hand-designed deterministic taxonomy; unseen-site generalization remains unmeasured.
-- Live VLM accuracy/latency has not yet been benchmarked against a configured external/local vision model.
-- LoRA training is prepared but not yet run on GPU, so there is no base-vs-fine-tuned score yet.
+- The measured VLM comparison uses a deliberately small 9-case held-out split across three mutation classes; a larger learned-model benchmark is still needed.
+- The canonical 34-sample QLoRA run did not improve held-out failure classification and regressed Recovery Top-1. Its Top-3 gain should be interpreted as an engineering diagnostic, not evidence of generalization.
 - Current visual grounding generation is ready for model predictions, but the repository does not claim a vision-model grounding score yet.
 - Iframe, canvas, shadow-DOM, cross-origin auth, and real enterprise browser policies are not included in the public synthetic MVP.
 - `on_failure` and `on_low_confidence` currently converge to the same call count in the small runtime benchmark; more benign low-confidence cases are needed to separate them experimentally.

@@ -14,7 +14,7 @@ def safe_div(numerator: int, denominator: int) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--predictions", required=True, help="JSONL with expected_failure/predicted_failure and expected_recovery/predicted_recovery")
-    parser.add_argument("--output", default=None, help="Optional path for a WorkflowLens model benchmark JSON report")
+    parser.add_argument("--output", default=None, help="Optional path for a Browser Reliability Runtime model benchmark JSON report")
     parser.add_argument("--model", default="unknown")
     parser.add_argument("--modalities", default="structured-text")
     args = parser.parse_args()

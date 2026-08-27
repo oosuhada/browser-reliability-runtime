@@ -16,7 +16,7 @@ def main() -> None:
     parser.add_argument("--model", default="Qwen/Qwen2.5-1.5B-Instruct")
     parser.add_argument("--data", default="training/data/train.jsonl")
     parser.add_argument("--eval-data", default="training/data/eval.jsonl")
-    parser.add_argument("--output", default="training/output/workflowlens-lora")
+    parser.add_argument("--output", default="training/output/browser-reliability-runtime-lora")
     parser.add_argument("--epochs", type=float, default=2.0)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--grad-accum", type=int, default=8)
