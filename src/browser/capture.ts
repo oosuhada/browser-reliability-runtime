@@ -1,6 +1,57 @@
 import type { Page } from "playwright";
 import type { BoundingBox, BrowserObservation, InteractiveElementSnapshot } from "./types.js";
 
+const CONTROL_QUERY_PARAMS = [
+  "mutation",
+  "customer",
+  "workflow",
+  "recovered",
+  "reauth",
+  "refreshed",
+  "confirmed"
+] as const;
+
+const CONTROL_QUERY_PATTERN = new RegExp(
+  `([?&])(?:${CONTROL_QUERY_PARAMS.join("|")})=[^&\\s\"'<>]*`,
+  "g"
+);
+
+export function sanitizeControlMetadataText(rawText: string): string {
+  return rawText
+    .replace(CONTROL_QUERY_PATTERN, (_match, separator: string) => separator === "?" ? "?" : "")
+    .replace(/\?&/g, "?")
+    .replace(/\?([\s\"'<>])/g, "$1")
+    .replace(/&([\s\"'<>])/g, "$1");
+}
+
+export function sanitizeWorkflowUrl(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    for (const key of CONTROL_QUERY_PARAMS) parsed.searchParams.delete(key);
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function sanitizeAccessibilityUrls(snapshot: string): string {
+  return snapshot
+    .split("\n")
+    .map((line) => line.replace(/(\/url:\s*)(\S+)/, (_match, prefix: string, rawValue: string) => {
+      try {
+        const absolute = new URL(rawValue, "http://workflowlens.synthetic");
+        for (const key of CONTROL_QUERY_PARAMS) absolute.searchParams.delete(key);
+        const sanitized = rawValue.startsWith("http://") || rawValue.startsWith("https://")
+          ? absolute.toString()
+          : `${absolute.pathname}${absolute.search}${absolute.hash}`;
+        return `${prefix}${sanitized}`;
+      } catch {
+        return `${prefix}${rawValue}`;
+      }
+    }))
+    .join("\n");
+}
+
 function intersectionRatio(target: BoundingBox | null, blocker: BoundingBox | null): number {
   if (!target || !blocker || target.width <= 0 || target.height <= 0) return 0;
   const left = Math.max(target.x, blocker.x);
@@ -39,7 +90,7 @@ export async function captureObservation(page: Page, targetId: string | null): P
   const pageText = (await page.locator("body").innerText()).slice(0, 12000);
   let accessibility = "";
   try {
-    accessibility = (await page.locator("body").ariaSnapshot()).slice(0, 12000);
+    accessibility = sanitizeAccessibilityUrls((await page.locator("body").ariaSnapshot()).slice(0, 12000));
   } catch {
     accessibility = pageText;
   }
@@ -89,7 +140,7 @@ export async function captureObservation(page: Page, targetId: string | null): P
   );
 
   return {
-    url: page.url(),
+    url: sanitizeWorkflowUrl(page.url()),
     title,
     workflowState: await getWorkflowState(page),
     pageText,

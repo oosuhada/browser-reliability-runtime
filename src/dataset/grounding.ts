@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sanitizeWorkflowUrl } from "../browser/capture.js";
 
 const BASE_URL = process.env.WORKFLOWLENS_BASE_URL ?? "http://127.0.0.1:4317";
 
@@ -51,7 +52,7 @@ async function main(): Promise<void> {
         bbox,
         center: center(bbox),
         viewport: page.viewportSize(),
-        page_url: page.url()
+        page_url: sanitizeWorkflowUrl(page.url())
       });
     }
   } finally {

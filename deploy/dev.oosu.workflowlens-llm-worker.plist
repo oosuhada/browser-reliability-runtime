@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.oosu.workflowlens-llm-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/gabrieljang/pyler-ads-analysis/projects/workflowlens/dist/local-llm/worker.js</string>
+    <string>--watch</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/gabrieljang/pyler-ads-analysis/projects/workflowlens</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/gabrieljang</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>WORKFLOWLENS_LLM_SSH_HOST</key>
+    <string>macbook-pro</string>
+    <key>WORKFLOWLENS_LLM_ENDPOINT</key>
+    <string>http://127.0.0.1:1234</string>
+    <key>WORKFLOWLENS_LLM_REQUEST_TIMEOUT_MS</key>
+    <string>900000</string>
+    <key>WORKFLOWLENS_LLM_IDLE_POLL_MS</key>
+    <string>30000</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/gabrieljang/Library/Logs/workflowlens-llm-worker.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/gabrieljang/Library/Logs/workflowlens-llm-worker.err.log</string>
+</dict>
+</plist>
+

@@ -111,6 +111,8 @@ DEMO_BROWSER_RUNS_ENABLED=true npm start
 
 The public demo only accepts the repository's fixed synthetic workflows, customers, mutations, and local order. It does not accept arbitrary URLs or browser instructions, allows only one active run at a time, and applies a small in-memory run limit.
 
+Benchmark/browser traces intentionally redact synthetic control metadata from model-facing evidence. Mutation/customer IDs are removed from captured URLs and accessibility links, and the in-app mutation banner is only visible in manual `debug=1` mode. This prevents a VLM or fine-tuned model from reading the injected failure label instead of reasoning from the UI state.
+
 The Mac mini deployment uses the versioned launchd template at `deploy/dev.oosu.workflowlens.plist`. The public service enables the same allowlisted synthetic runner and points browser execution back to the local `4317` service only.
 
 In another shell:
@@ -168,9 +170,18 @@ Generate a balanced synthetic trace batch across all 16 failure classes and mult
 ```bash
 npm run dataset:generate
 npm run dataset:export
+npm run dataset:validate
+```
+
+For a targeted mutation regression after changing one failure condition:
+
+```bash
+npm run dataset:generate -- --mutation=element_moved
 ```
 
 The generator currently produces 43 controlled workflow runs: three order variants for failures that occur before the refund policy gate, and two low-value order variants for failures that occur on the refund execution screen. This keeps the failure mutation reachable while adding amount/order variation without manual labels.
+
+The exporter skips legacy traces that predate temporal-state metadata or contain benchmark control labels. `dataset:validate` then scans only model-facing fields and fails if the injected mutation ID, failure type, or expected recovery string appears in the input evidence.
 
 Latest local generation result:
 
@@ -355,6 +366,46 @@ npm run run:workflow -- \
 ```
 
 If the VLM request fails, the trace records the error evidence and falls back to the local heuristic diagnosis instead of terminating the workflow.
+
+## MacBook Pro local-LLM waiting queue
+
+WorkflowLens can use the Tailscale-reachable MacBook Pro as a serialized inference worker without exposing LM Studio outside that machine. Queue files live under `artifacts/local-llm-queue/` on the MacBook Air and move through `pending`, `running`, `blocked`, `completed`, and `failed` directories. Requests are sent to `127.0.0.1:1234` on the MacBook Pro through SSH stdin, so screenshots and prompts do not need a public API endpoint.
+
+Enqueue held-out temporal failure cases for the model that is currently loaded in LM Studio:
+
+```bash
+npm run llm:queue:enqueue -- --vision=false
+npm run llm:queue:status
+npm run llm:queue:status -- --remote
+npm run llm:queue:work
+npm run llm:queue:pause
+npm run llm:queue:resume
+```
+
+`pause` stops the worker from claiming new jobs without killing the daemon or losing queued work. A job that is already running is allowed to finish; `resume` continues FIFO processing from the persisted queue.
+
+Run the persistent single-concurrency worker manually with:
+
+```bash
+npm run build
+node dist/local-llm/worker.js --watch
+```
+
+The repository also includes `deploy/dev.oosu.workflowlens-llm-worker.plist` for a MacBook Air `launchd` worker. The worker never loads or unloads LM Studio models. A text job uses an already loaded LLM/VLM. A vision job is moved to `blocked` when no VLM is loaded and is retried automatically by the watch worker after a compatible VLM becomes available.
+
+Enqueue screenshot-aware jobs after loading a VLM in LM Studio:
+
+```bash
+npm run llm:queue:enqueue -- --vision=true --batch=heldout_vision
+```
+
+Evaluate completed jobs with:
+
+```bash
+npm run llm:queue:evaluate -- --batch=heldout_vision
+```
+
+The enqueue command deduplicates repeated trace runs by mutation/order/transition signature before creating jobs. Evaluation writes a JSON report under `artifacts/reports/` so a local-model baseline can be compared directly with later VLM or fine-tuned runs.
 
 ## LoRA / SFT experiment
 

@@ -14,11 +14,18 @@
     "benchmark": "tsx src/evaluation/benchmark.ts",
     "dataset:generate": "tsx src/dataset/generate.ts",
     "dataset:export": "tsx src/dataset/export.ts",
+    "dataset:validate": "tsx src/dataset/validate.ts",
     "dataset:grounding": "tsx src/dataset/grounding.ts",
     "evaluate:grounding": "tsx src/evaluation/grounding.ts",
     "benchmark:runtime": "tsx src/evaluation/runtime.ts",
     "benchmark:policy": "tsx src/evaluation/policy.ts",
-    "benchmark:transitions": "tsx src/evaluation/transitions.ts"
+    "benchmark:transitions": "tsx src/evaluation/transitions.ts",
+    "llm:queue:enqueue": "tsx src/local-llm/enqueue.ts",
+    "llm:queue:work": "tsx src/local-llm/worker.ts",
+    "llm:queue:status": "tsx src/local-llm/status.ts",
+    "llm:queue:evaluate": "tsx src/local-llm/evaluate.ts",
+    "llm:queue:pause": "tsx src/local-llm/control.ts pause",
+    "llm:queue:resume": "tsx src/local-llm/control.ts resume"
   },
   "dependencies": {
     "express": "^5.1.0"
