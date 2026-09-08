@@ -25,5 +25,11 @@ jobs:
       - name: Atomic queue claim regression
         run: npm run test:queue-claim
 
+      - name: Atomic queue storage regression
+        run: npm run test:queue-storage
+
+      - name: Retry backoff policy regression
+        run: npm run test:retry-policy
+
       - name: Build
         run: npm run build

@@ -43,10 +43,21 @@ export function jobFilename(job: Pick<LocalLlmQueueJob, "createdAt" | "id">): st
   return `${stamp}_${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`;
 }
 
+async function writeJsonAtomically(target: string, job: LocalLlmQueueJob): Promise<void> {
+  const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(temp, JSON.stringify(job, null, 2));
+    await rename(temp, target);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
 export async function writeJob(job: LocalLlmQueueJob, filename = jobFilename(job)): Promise<string> {
   await ensureQueueDirectories();
   const target = path.join(queueDirectory(job.status), filename);
-  await writeFile(target, JSON.stringify(job, null, 2));
+  await writeJsonAtomically(target, job);
   return target;
 }
 
@@ -70,7 +81,7 @@ export async function moveJob(
   const source = path.join(queueDirectory(from), filename);
   const target = path.join(queueDirectory(to), filename);
   const job = update(await readJob(filename, from));
-  await writeFile(source, JSON.stringify(job, null, 2));
+  await writeJsonAtomically(source, job);
   await rename(source, target);
   return { filename, job };
 }
@@ -95,9 +106,10 @@ export async function tryClaimJob(
     status: "running",
     updatedAt: new Date().toISOString(),
     blockedReason: null,
+    nextAttemptAt: null,
     attempts: job.attempts + 1
   };
-  await writeFile(target, JSON.stringify(claimed, null, 2));
+  await writeJsonAtomically(target, claimed);
   return { filename, job: claimed };
 }
 
@@ -113,6 +125,7 @@ export async function recoverStaleRunning(maxAgeMs = 30 * 60_000): Promise<numbe
       ...job,
       status: "pending",
       updatedAt: new Date().toISOString(),
+      nextAttemptAt: null,
       blockedReason: "Recovered from stale running state after worker restart."
     }));
     recovered += 1;
