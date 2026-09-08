@@ -75,6 +75,32 @@ export async function moveJob(
   return { filename, job };
 }
 
+export async function tryClaimJob(
+  filename: string,
+  from: "pending" | "blocked"
+): Promise<{ filename: string; job: LocalLlmQueueJob } | null> {
+  await ensureQueueDirectories();
+  const source = path.join(queueDirectory(from), filename);
+  const target = path.join(queueDirectory("running"), filename);
+  try {
+    await rename(source, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+
+  const job = JSON.parse(await readFile(target, "utf8")) as LocalLlmQueueJob;
+  const claimed: LocalLlmQueueJob = {
+    ...job,
+    status: "running",
+    updatedAt: new Date().toISOString(),
+    blockedReason: null,
+    attempts: job.attempts + 1
+  };
+  await writeFile(target, JSON.stringify(claimed, null, 2));
+  return { filename, job: claimed };
+}
+
 export async function recoverStaleRunning(maxAgeMs = 30 * 60_000): Promise<number> {
   await ensureQueueDirectories();
   const now = Date.now();
