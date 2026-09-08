@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { LocalLlmQueueJob, LocalLlmQueueStatus } from "./types.js";
 
@@ -45,12 +45,35 @@ export function jobFilename(job: Pick<LocalLlmQueueJob, "createdAt" | "id">): st
 
 async function writeJsonAtomically(target: string, job: LocalLlmQueueJob): Promise<void> {
   const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  const encoded = JSON.stringify(job, null, 2);
   try {
-    await writeFile(temp, JSON.stringify(job, null, 2));
+    const handle = await open(temp, "w");
+    try {
+      await handle.writeFile(encoded);
+      await handle.datasync();
+    } finally {
+      await handle.close();
+    }
     await rename(temp, target);
+    await syncDirectoryBestEffort(path.dirname(target));
   } catch (error) {
     await rm(temp, { force: true });
     throw error;
+  }
+}
+
+async function syncDirectoryBestEffort(directory: string): Promise<void> {
+  try {
+    const handle = await open(directory, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    // Directory fsync is not portable across every local filesystem. The queue
+    // still preserves the stronger application invariant: readers observe either
+    // the old JSON file or the complete renamed file, never a partial write.
   }
 }
 
