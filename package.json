@@ -25,6 +25,7 @@
     "llm:queue:enqueue": "tsx src/local-llm/enqueue.ts",
     "llm:queue:work": "tsx src/local-llm/worker.ts",
     "llm:queue:status": "tsx src/local-llm/status.ts",
+    "test:queue-claim": "tsx src/local-llm/queue-claim.test.ts",
     "llm:queue:evaluate": "tsx src/local-llm/evaluate.ts",
     "llm:queue:pause": "tsx src/local-llm/control.ts pause",
     "llm:queue:resume": "tsx src/local-llm/control.ts resume"

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ensureQueueDirectories, isQueuePaused, listJobFiles, moveJob, queueDirectory, readJob, recoverStaleRunning } from "./queue.js";
+import { ensureQueueDirectories, isQueuePaused, listJobFiles, moveJob, queueDirectory, readJob, recoverStaleRunning, tryClaimJob } from "./queue.js";
 import { isRemoteInferenceBusy, resolveLoadedModel, runRemoteDiagnosis } from "./remote.js";
 import type { LocalLlmCompletedJob, LocalLlmQueueJob, LocalLlmQueueStatus } from "./types.js";
 
@@ -75,13 +75,8 @@ async function processOne(): Promise<boolean> {
     return next.status === "pending";
   }
 
-  const claimed = await moveJob(next.filename, next.status, "running", (job) => ({
-    ...job,
-    status: "running",
-    updatedAt: new Date().toISOString(),
-    blockedReason: null,
-    attempts: job.attempts + 1
-  }));
+  const claimed = await tryClaimJob(next.filename, next.status);
+  if (!claimed) return true;
   const job = claimed.job;
   try {
     let screenshotBase64: string | null = null;
