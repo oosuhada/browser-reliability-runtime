@@ -29,6 +29,7 @@ export interface LocalLlmQueueJob {
   updatedAt: string;
   status: LocalLlmQueueStatus;
   attempts: number;
+  nextAttemptAt?: string | null;
   requiresVision: boolean;
   requestedModel: string | null;
   blockedReason: string | null;
