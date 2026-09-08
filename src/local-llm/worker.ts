@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ensureQueueDirectories, isQueuePaused, listJobFiles, moveJob, queueDirectory, readJob, recoverStaleRunning, tryClaimJob } from "./queue.js";
 import { isRemoteInferenceBusy, resolveLoadedModel, runRemoteDiagnosis } from "./remote.js";
+import { isRetryReady, retryAt } from "./retry-policy.js";
 import type { LocalLlmCompletedJob, LocalLlmQueueJob, LocalLlmQueueStatus } from "./types.js";
 
 function hasArg(name: string): boolean {
@@ -18,7 +19,10 @@ function idlePollMs(): number {
 
 async function candidate(): Promise<{ filename: string; status: "pending" | "blocked" } | null> {
   const pending = await listJobFiles("pending");
-  if (pending[0]) return { filename: pending[0], status: "pending" };
+  for (const filename of pending) {
+    const job = await readJob(filename, "pending");
+    if (isRetryReady(job)) return { filename, status: "pending" };
+  }
   const blocked = await listJobFiles("blocked");
   if (blocked[0]) return { filename: blocked[0], status: "blocked" };
   return null;
@@ -107,6 +111,7 @@ async function processOne(): Promise<boolean> {
       ...running,
       status: destination,
       updatedAt: new Date().toISOString(),
+      nextAttemptAt: retry ? retryAt(job) : null,
       blockedReason: message
     }));
     console.error(`${retry ? "RETRY" : "FAILED"} ${job.id}: ${message}`);

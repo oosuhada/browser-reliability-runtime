@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { LocalLlmQueueJob, LocalLlmQueueStatus } from "./types.js";
 
@@ -43,10 +43,44 @@ export function jobFilename(job: Pick<LocalLlmQueueJob, "createdAt" | "id">): st
   return `${stamp}_${job.id.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`;
 }
 
+async function writeJsonAtomically(target: string, job: LocalLlmQueueJob): Promise<void> {
+  const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  const encoded = JSON.stringify(job, null, 2);
+  try {
+    const handle = await open(temp, "w");
+    try {
+      await handle.writeFile(encoded);
+      await handle.datasync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temp, target);
+    await syncDirectoryBestEffort(path.dirname(target));
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
+async function syncDirectoryBestEffort(directory: string): Promise<void> {
+  try {
+    const handle = await open(directory, "r");
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    // Directory fsync is not portable across every local filesystem. The queue
+    // still preserves the stronger application invariant: readers observe either
+    // the old JSON file or the complete renamed file, never a partial write.
+  }
+}
+
 export async function writeJob(job: LocalLlmQueueJob, filename = jobFilename(job)): Promise<string> {
   await ensureQueueDirectories();
   const target = path.join(queueDirectory(job.status), filename);
-  await writeFile(target, JSON.stringify(job, null, 2));
+  await writeJsonAtomically(target, job);
   return target;
 }
 
@@ -70,7 +104,7 @@ export async function moveJob(
   const source = path.join(queueDirectory(from), filename);
   const target = path.join(queueDirectory(to), filename);
   const job = update(await readJob(filename, from));
-  await writeFile(source, JSON.stringify(job, null, 2));
+  await writeJsonAtomically(source, job);
   await rename(source, target);
   return { filename, job };
 }
@@ -95,9 +129,10 @@ export async function tryClaimJob(
     status: "running",
     updatedAt: new Date().toISOString(),
     blockedReason: null,
+    nextAttemptAt: null,
     attempts: job.attempts + 1
   };
-  await writeFile(target, JSON.stringify(claimed, null, 2));
+  await writeJsonAtomically(target, claimed);
   return { filename, job: claimed };
 }
 
@@ -113,6 +148,7 @@ export async function recoverStaleRunning(maxAgeMs = 30 * 60_000): Promise<numbe
       ...job,
       status: "pending",
       updatedAt: new Date().toISOString(),
+      nextAttemptAt: null,
       blockedReason: "Recovered from stale running state after worker restart."
     }));
     recovered += 1;
