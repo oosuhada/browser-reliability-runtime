@@ -4,6 +4,13 @@
 
 [Live Demo](https://workflowlens.oosu.dev) · [Measured Results](reports/measured/README.md) · [Failure Benchmark](#current-deterministic-benchmark) · [Local Model Benchmark](#macbook-pro-local-llm-waiting-queue)
 
+## Product preview
+
+![Browser Reliability Runtime product overview](.github/assets/portfolio/browser-reliability-runtime-overview.png)
+
+The public demo shows the synthetic workflow launcher and reliability surface used to explain
+failure diagnosis, recovery execution, and verification.
+
 Browser Reliability Runtime is not a general-purpose browser agent. It assumes an existing Playwright/RPA workflow and focuses on one question:
 
 > When the workflow fails, can we understand why it failed, choose a policy-safe recovery, execute it, and verify that the workflow returned to a valid state?
