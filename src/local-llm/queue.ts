@@ -16,6 +16,16 @@ export function pauseFile(): string {
   return path.join(queueRoot(), "PAUSED");
 }
 
+export function pendingQueueLimit(): number | null {
+  const raw = process.env.WORKFLOWLENS_LLM_QUEUE_MAX_PENDING;
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("WORKFLOWLENS_LLM_QUEUE_MAX_PENDING must be a positive integer when set");
+  }
+  return parsed;
+}
+
 export async function isQueuePaused(): Promise<boolean> {
   try {
     await access(pauseFile());
@@ -79,6 +89,13 @@ async function syncDirectoryBestEffort(directory: string): Promise<void> {
 
 export async function writeJob(job: LocalLlmQueueJob, filename = jobFilename(job)): Promise<string> {
   await ensureQueueDirectories();
+  const limit = pendingQueueLimit();
+  if (job.status === "pending" && limit !== null) {
+    const pending = await listJobFiles("pending");
+    if (pending.length >= limit) {
+      throw new Error(`Pending local LLM queue is full: ${pending.length}/${limit}`);
+    }
+  }
   const target = path.join(queueDirectory(job.status), filename);
   await writeJsonAtomically(target, job);
   return target;
